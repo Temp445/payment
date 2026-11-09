@@ -1,0 +1,182 @@
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum OrderStatus {
+  CREATED
+  ACTIVE
+  PAID
+  FAILED
+  EXPIRED
+  CANCELLED
+  PARTIALLY_REFUNDED
+  REFUNDED
+}
+
+enum PaymentStatus {
+  SUCCESS
+  FAILED
+  PENDING
+  USER_DROPPED
+  CANCELLED
+}
+
+enum RefundStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+enum WebhookStatus {
+  PENDING
+  PROCESSING
+  DELIVERED
+  FAILED
+}
+
+model Application {
+  id               String       @id @default(uuid())
+  appCode          String       @unique // e.g. 'APP001', 'WEBSITE_01', 'ANDROID_STORE'
+  appName          String
+  clientId         String       @unique
+  clientSecretHash String
+  webhookUrl       String?
+  webhookSecret    String
+  isActive         Boolean      @default(true)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  orders           Order[]
+  auditLogs        AuditLog[]
+  outboxDeliveries WebhookOutboxQueue[]
+
+  @@map("applications")
+}
+
+model Order {
+  id               String       @id @default(uuid())
+  applicationId    String
+  application      Application  @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+  appOrderId       String       // Client's order reference
+  cfOrderId        String       @unique // Namespaced: ${appCode}_${appOrderId}
+  paymentSessionId String?
+  orderAmount      Decimal      @db.Decimal(12, 2)
+  orderCurrency    String       @default("INR")
+  orderStatus      OrderStatus  @default(CREATED)
+  customerId       String
+  customerName     String?
+  customerEmail    String?
+  customerPhone    String
+  orderNote        String?
+  returnUrl        String?
+  notifyUrl        String?
+  metadata         Json?        @default("{}")
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  payments         Payment[]
+  refunds          Refund[]
+  outboxDeliveries WebhookOutboxQueue[]
+
+  @@unique([applicationId, appOrderId])
+  @@index([applicationId])
+  @@index([cfOrderId])
+  @@index([orderStatus])
+  @@map("orders")
+}
+
+model Payment {
+  id                String        @id @default(uuid())
+  orderId           String
+  order             Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  cfPaymentId       String        @unique
+  paymentAmount     Decimal       @db.Decimal(12, 2)
+  paymentCurrency   String        @default("INR")
+  paymentStatus     PaymentStatus
+  paymentMethod     String?       // 'upi', 'card', 'netbanking'
+  paymentGroup      String?
+  paymentTime       DateTime?
+  bankReference     String?
+  authId            String?
+  errorCode         String?
+  errorDescription  String?
+  rawWebhookPayload Json?
+  createdAt         DateTime      @default(now())
+
+  @@index([orderId])
+  @@map("payments")
+}
+
+model Refund {
+  id             String       @id @default(uuid())
+  orderId        String
+  order          Order        @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  cfRefundId     String?      @unique
+  refundAmount   Decimal      @db.Decimal(12, 2)
+  refundCurrency String       @default("INR")
+  refundNote     String?
+  refundStatus   RefundStatus @default(PENDING)
+  refundType     String       @default("STANDARD")
+  rawResponse    Json?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([orderId])
+  @@map("refunds")
+}
+
+model Settlement {
+  id                 String    @id @default(uuid())
+  cfSettlementId     String    @unique
+  settlementAmount   Decimal   @db.Decimal(12, 2)
+  settlementCurrency String    @default("INR")
+  utrNumber          String?
+  settlementDate     DateTime
+  status             String
+  rawPayload         Json?
+  createdAt          DateTime  @default(now())
+
+  @@map("settlements")
+}
+
+model WebhookOutboxQueue {
+  id            String        @id @default(uuid())
+  applicationId String
+  application   Application   @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  orderId       String?
+  order         Order?        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  eventType     String        // e.g. 'PAYMENT.SUCCESS'
+  payload       Json
+  status        WebhookStatus @default(PENDING)
+  attempts      Int           @default(0)
+  maxAttempts   Int           @default(5)
+  nextRetryAt   DateTime      @default(now())
+  responseStatus Int?
+  lastError     String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([status, nextRetryAt])
+  @@map("webhook_outbox_queue")
+}
+
+model AuditLog {
+  id             String       @id @default(uuid())
+  applicationId  String?
+  application    Application? @relation(fields: [applicationId], references: [id], onDelete: SetNull)
+  action         String
+  entityType     String?
+  entityId       String?
+  ipAddress      String?
+  requestDetails Json?
+  createdAt      DateTime     @default(now())
+
+  @@map("audit_logs")
+}
+
