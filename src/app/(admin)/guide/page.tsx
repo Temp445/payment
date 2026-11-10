@@ -173,7 +173,17 @@ export function usePaymentHub() {
       });
 
       if (checkoutResult.error) {
-        throw new Error(checkoutResult.error.message || "Payment cancelled");
+        // Automatically inform Payment Hub to mark order as cancelled
+        try {
+          await fetch(\`\${hubUrl}/orders/\${orderId}/cancel\`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "x-client-id": clientId },
+            body: JSON.stringify({ reason: checkoutResult.error.message || "Payment aborted by customer" }),
+          });
+        } catch {}
+        setError(checkoutResult.error.message || "Payment has been aborted. Please try again");
+        if (onFailure) onFailure(checkoutResult.error.message || "Payment aborted");
+        return;
       }
 
       // 4. Poll payment status to confirm
@@ -263,7 +273,7 @@ export function CheckoutButton({
         if (onSuccess) onSuccess(paymentId);
       },
       onFailure: (err) => {
-        console.error("Payment failed:", err);
+        console.warn("Payment checkout notice:", err);
       },
     });
   };
@@ -411,7 +421,17 @@ export function usePaymentHub() {
       });
 
       if (checkoutResult.error) {
-        throw new Error(checkoutResult.error.message || "Payment cancelled");
+        // Automatically inform Payment Hub to mark order as cancelled
+        try {
+          await fetch(\`\${hubUrl}/orders/\${orderId}/cancel\`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "x-client-id": clientId },
+            body: JSON.stringify({ reason: checkoutResult.error.message || "Payment aborted by customer" }),
+          });
+        } catch {}
+        setError(checkoutResult.error.message || "Payment has been aborted. Please try again");
+        if (onFailure) onFailure(checkoutResult.error.message || "Payment aborted");
+        return;
       }
 
       // 4. Poll payment status to confirm
@@ -499,7 +519,7 @@ export function CheckoutButton({
         if (onSuccess) onSuccess(paymentId);
       },
       onFailure: (err) => {
-        console.error("Payment failed:", err);
+        console.warn("Payment checkout notice:", err);
       },
     });
   };
@@ -1052,7 +1072,7 @@ export function CheckoutButton({ amount }: { amount: number }) {
         setReceipt(\`🎉 Payment Confirmed! Ref ID: \${paymentId}\`);
       },
       onFailure: (err) => {
-        console.error("Payment failed:", err);
+        console.warn("Payment checkout notice:", err);
       },
     });
   };

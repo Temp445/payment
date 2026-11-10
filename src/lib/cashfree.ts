@@ -51,10 +51,14 @@ export class CashfreeAdapter {
         );
       }
 
-      const request = {
+      // Auto-expire order after 20 minutes if unpaid
+      const expiryTime = new Date(Date.now() + 20 * 60 * 1000).toISOString();
+
+      const request: any = {
         order_id: params.cfOrderId,
         order_amount: params.orderAmount,
         order_currency: params.orderCurrency || "INR",
+        order_expiry_time: expiryTime,
         customer_details: {
           customer_id: params.customer.id,
           customer_phone: params.customer.phone,
@@ -93,6 +97,35 @@ export class CashfreeAdapter {
       throw new Error(
         error?.response?.data?.message || "Failed to fetch Cashfree payments"
       );
+    }
+  }
+
+  /**
+   * Terminate/cancel an active order on Cashfree
+   */
+  static async terminateOrder(cfOrderId: string) {
+    try {
+      const { appId, secretKey, baseUrl } = this.ensureConfigured();
+      const response = await axios.patch(
+        `${baseUrl}/orders/${cfOrderId}`,
+        { order_status: "TERMINATED" },
+        {
+          headers: {
+            "x-client-id": appId,
+            "x-client-secret": secretKey,
+            "x-api-version": this.getApiVersion(),
+            "Content-Type": "application/json",
+          },
+        }
+      );
+      return response.data;
+    } catch (error: any) {
+      logger.warn(
+        `Cashfree terminateOrder skipped or failed: ${
+          error?.response?.data?.message || error.message
+        }`
+      );
+      return null;
     }
   }
 

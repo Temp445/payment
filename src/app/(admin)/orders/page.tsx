@@ -2,10 +2,13 @@ import React from "react";
 import { Header } from "@/components/layout/Header";
 import { OrdersTableClient } from "@/components/orders/OrdersTableClient";
 import { prisma } from "@/lib/prisma";
+import { OrderService } from "@/services/order.service";
 
 export const dynamic = "force-dynamic";
 
 export default async function OrdersPage() {
+  await OrderService.autoExpireStaleOrders(20);
+
   const orders = await prisma.order.findMany({
     take: 100,
     orderBy: { createdAt: "desc" },

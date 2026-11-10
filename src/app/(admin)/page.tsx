@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { DollarSign, Activity, Layers, Send } from "lucide-react";
 import Link from "next/link";
+import { OrderService } from "@/services/order.service";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +26,9 @@ export default async function OverviewPage() {
   let paymentMethodsData: any[] = [];
 
   try {
+    // 1. Auto-expire any unpaid ACTIVE orders older than 20 minutes
+    await OrderService.autoExpireStaleOrders(20);
+
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
     sevenDaysAgo.setHours(0, 0, 0, 0);
@@ -63,10 +67,13 @@ export default async function OverviewPage() {
           payments: { select: { paymentMethod: true, cfPaymentId: true }, take: 1 },
         },
       }),
-      prisma.payment.groupBy({
-        by: ["paymentMethod"],
+      prisma.payment.findMany({
         where: { paymentStatus: "SUCCESS" },
-        _count: true,
+        select: {
+          paymentMethod: true,
+          paymentGroup: true,
+          rawWebhookPayload: true,
+        },
       }),
       prisma.order.findMany({
         where: {
@@ -90,12 +97,34 @@ export default async function OverviewPage() {
     recentOrders = orders;
 
     // Real payment methods breakdown from actual successful payments
-    paymentMethodsData = payments
-      .filter((p) => p.paymentMethod)
-      .map((p) => ({
-        name: p.paymentMethod || "Other",
-        value: p._count,
-      }));
+    const methodCounts: Record<string, number> = {};
+    for (const p of payments) {
+      let raw = (p.paymentMethod || p.paymentGroup || "").trim().toLowerCase();
+      if (!raw && p.rawWebhookPayload && typeof p.rawWebhookPayload === "object") {
+        const payload: any = p.rawWebhookPayload;
+        raw = (payload?.data?.payment?.payment_group || "").toLowerCase();
+      }
+
+      let label = "Other";
+      if (raw.includes("upi")) {
+        label = "UPI";
+      } else if (raw.includes("card") || raw.includes("debit") || raw.includes("credit")) {
+        label = "Card";
+      } else if (raw.includes("net") || raw.includes("bank")) {
+        label = "NetBanking";
+      } else if (raw.includes("wallet") || raw.includes("app")) {
+        label = "Wallet";
+      } else if (raw) {
+        label = raw.toUpperCase();
+      }
+
+      methodCounts[label] = (methodCounts[label] || 0) + 1;
+    }
+
+    paymentMethodsData = Object.entries(methodCounts).map(([name, value]) => ({
+      name,
+      value,
+    }));
 
     // Real 7-day transaction volume based strictly on database records
     const dayMap: { [key: string]: { volume: number; orders: number } } = {};

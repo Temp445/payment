@@ -107,6 +107,11 @@ export class WebhookService {
 
     // 7. Atomic Prisma Transaction: Update Order & Upsert Payment
     await prisma.$transaction(async (tx) => {
+      const rawPaymentMethod =
+        paymentData.payment_group ||
+        (paymentData.payment_method ? Object.keys(paymentData.payment_method)[0] : null) ||
+        null;
+
       // Upsert payment record
       await tx.payment.upsert({
         where: { cfPaymentId },
@@ -116,8 +121,8 @@ export class WebhookService {
           paymentAmount,
           paymentCurrency,
           paymentStatus: verifiedPaymentStatus,
-          paymentMethod: paymentData.payment_method?.type || null,
-          paymentGroup: paymentData.payment_group || null,
+          paymentMethod: rawPaymentMethod,
+          paymentGroup: paymentData.payment_group || rawPaymentMethod,
           paymentTime: paymentData.payment_time ? new Date(paymentData.payment_time) : new Date(),
           bankReference: paymentData.bank_reference || null,
           authId: paymentData.auth_id || null,
@@ -125,6 +130,10 @@ export class WebhookService {
         },
         update: {
           paymentStatus: verifiedPaymentStatus,
+          paymentMethod: rawPaymentMethod,
+          paymentGroup: paymentData.payment_group || rawPaymentMethod,
+          paymentTime: paymentData.payment_time ? new Date(paymentData.payment_time) : undefined,
+          bankReference: paymentData.bank_reference || undefined,
           rawWebhookPayload: event,
         },
       });

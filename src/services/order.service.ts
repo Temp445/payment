@@ -163,6 +163,107 @@ export class OrderService {
   }
 
   /**
+   * Cancel or Abort an active order
+   */
+  static async cancelOrder(
+    app: AuthenticatedApp,
+    orderId: string,
+    reason: string = "Payment aborted by customer"
+  ) {
+    const order = await prisma.order.findFirst({
+      where: {
+        applicationId: app.id,
+        appOrderId: orderId,
+      },
+    });
+
+    if (!order) {
+      return { success: false, error: "Order not found", status: 404 };
+    }
+
+    if (order.orderStatus === "PAID") {
+      return {
+        success: false,
+        error: "Cannot cancel an already completed/paid order",
+        status: 400,
+      };
+    }
+
+    if (order.orderStatus === "CANCELLED") {
+      return {
+        success: true,
+        order_id: order.appOrderId,
+        status: "CANCELLED",
+        message: "Order is already cancelled",
+      };
+    }
+
+    // 1. Update order status to CANCELLED in database
+    await prisma.order.update({
+      where: { id: order.id },
+      data: {
+        orderStatus: "CANCELLED",
+      },
+    });
+
+    // 2. Audit Log
+    await prisma.auditLog.create({
+      data: {
+        applicationId: app.id,
+        action: "ORDER_CANCELLED",
+        entityType: "Order",
+        entityId: order.id,
+        requestDetails: {
+          appOrderId: order.appOrderId,
+          cfOrderId: order.cfOrderId,
+          reason,
+        },
+      },
+    });
+
+    // 3. Attempt termination on Cashfree
+    if (order.cfOrderId) {
+      CashfreeAdapter.terminateOrder(order.cfOrderId).catch((err) => {
+        logger.warn(`Cashfree terminateOrder error: ${err.message}`);
+      });
+    }
+
+    logger.info(`Order ${order.appOrderId} marked CANCELLED for app ${app.appCode}`);
+
+    return {
+      success: true,
+      order_id: order.appOrderId,
+      status: "CANCELLED",
+      reason,
+    };
+  }
+
+  /**
+   * Auto-expire any unpaid ACTIVE orders older than maxAgeMinutes (default 20 minutes)
+   */
+  static async autoExpireStaleOrders(maxAgeMinutes = 20) {
+    try {
+      const threshold = new Date(Date.now() - maxAgeMinutes * 60 * 1000);
+      const result = await prisma.order.updateMany({
+        where: {
+          orderStatus: "ACTIVE",
+          createdAt: { lt: threshold },
+        },
+        data: {
+          orderStatus: "EXPIRED",
+        },
+      });
+      if (result.count > 0) {
+        logger.info(`Auto-expired ${result.count} stale ACTIVE orders older than ${maxAgeMinutes} minutes`);
+      }
+      return result.count;
+    } catch (e: any) {
+      logger.warn(`autoExpireStaleOrders skipped: ${e.message}`);
+      return 0;
+    }
+  }
+
+  /**
    * Lightweight endpoint for Mobile SDK and Client polling
    */
   static async getOrderStatus(app: AuthenticatedApp, orderId: string) {
@@ -210,12 +311,14 @@ export class OrderService {
             });
 
             const paymentAmount = successPayment.payment_amount ?? Number(order.orderAmount);
+            const method = successPayment.payment_group || "OTHER";
             const paymentRecord = await prisma.payment.upsert({
               where: { cfPaymentId: String(successPayment.cf_payment_id) },
               update: {
                 paymentStatus: "SUCCESS",
                 paymentAmount: paymentAmount,
-                paymentMethod: successPayment.payment_group || "OTHER",
+                paymentMethod: method,
+                paymentGroup: method,
                 bankReference: successPayment.bank_reference,
               },
               create: {
@@ -223,7 +326,8 @@ export class OrderService {
                 cfPaymentId: String(successPayment.cf_payment_id),
                 paymentAmount: paymentAmount,
                 paymentStatus: "SUCCESS",
-                paymentMethod: successPayment.payment_group || "OTHER",
+                paymentMethod: method,
+                paymentGroup: method,
                 bankReference: successPayment.bank_reference,
               },
             });
@@ -238,6 +342,42 @@ export class OrderService {
                 bankReference: paymentRecord.bankReference,
               },
             ];
+          } else {
+            // Record non-success attempts (FAILED, USER_DROPPED)
+            for (const attempt of cfPayments) {
+              if (attempt.cf_payment_id) {
+                const statusMap: Record<string, any> = {
+                  SUCCESS: "SUCCESS",
+                  FAILED: "FAILED",
+                  USER_DROPPED: "USER_DROPPED",
+                  PENDING: "PENDING",
+                  CANCELLED: "CANCELLED",
+                };
+                const mappedStatus = statusMap[attempt.payment_status] || "FAILED";
+                const method = attempt.payment_group || "OTHER";
+                const amt = attempt.payment_amount ?? Number(order.orderAmount);
+
+                await prisma.payment.upsert({
+                  where: { cfPaymentId: String(attempt.cf_payment_id) },
+                  update: {
+                    paymentStatus: mappedStatus,
+                    paymentAmount: amt,
+                    paymentMethod: method,
+                    paymentGroup: method,
+                    bankReference: attempt.bank_reference,
+                  },
+                  create: {
+                    orderId: order.id,
+                    cfPaymentId: String(attempt.cf_payment_id),
+                    paymentAmount: amt,
+                    paymentStatus: mappedStatus,
+                    paymentMethod: method,
+                    paymentGroup: method,
+                    bankReference: attempt.bank_reference,
+                  },
+                });
+              }
+            }
           }
         }
       } catch (err: any) {
