@@ -13,6 +13,7 @@ import {
   ShieldCheck,
   CreditCard,
   BookOpen,
+  Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -25,6 +26,7 @@ const navItems = [
   { label: "Reconciliation", href: "/reconciliation", icon: Scale },
   { label: "Outbox Queue", href: "/outbox", icon: Send },
   { label: "Audit Logs", href: "/audit-logs", icon: ShieldCheck },
+  { label: "System Settings", href: "/settings", icon: Settings },
 ];
 
 export function Sidebar() {

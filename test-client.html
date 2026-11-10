@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Payment Hub - Client-Only Test Runner</title>
+  <script src="https://sdk.cashfree.com/js/v3/cashfree.js"></script>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --border: #334155;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --success: #16a34a;
+      --danger: #dc2626;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+    }
+    .card {
+      width: 100%;
+      max-width: 580px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 1rem;
+      padding: 2rem;
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.4);
+    }
+    .badge {
+      display: inline-block;
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 0.25rem 0.5rem;
+      border-radius: 9999px;
+      background: rgba(37, 99, 235, 0.2);
+      color: #60a5fa;
+      margin-bottom: 0.75rem;
+    }
+    h1 { font-size: 1.4rem; margin-bottom: 0.5rem; }
+    p.desc { font-size: 0.85rem; color: var(--muted); margin-bottom: 1.5rem; }
+    .form-group { margin-bottom: 1rem; }
+    label { display: block; font-size: 0.75rem; font-weight: 600; color: var(--muted); margin-bottom: 0.35rem; }
+    input {
+      width: 100%;
+      padding: 0.65rem 0.85rem;
+      background: #0b1120;
+      border: 1px solid var(--border);
+      border-radius: 0.5rem;
+      color: var(--text);
+      font-size: 0.85rem;
+      font-family: inherit;
+    }
+    input:focus { outline: none; border-color: var(--primary); }
+    .row { display: flex; gap: 0.75rem; }
+    .row > div { flex: 1; }
+    button.btn {
+      width: 100%;
+      padding: 0.75rem;
+      background: var(--primary);
+      color: white;
+      border: none;
+      border-radius: 0.5rem;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s ease;
+      margin-top: 0.5rem;
+    }
+    button.btn:hover:not(:disabled) { background: var(--primary-hover); }
+    button.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    #log {
+      margin-top: 1.5rem;
+      background: #0b1120;
+      border: 1px solid var(--border);
+      border-radius: 0.5rem;
+      padding: 1rem;
+      font-family: monospace;
+      font-size: 0.75rem;
+      line-height: 1.5;
+      max-height: 220px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      color: #cbd5e1;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="badge">Client-Only (No Secret, Browser Direct)</div>
+    <h1>Test Client-Only Checkout</h1>
+    <p class="desc">Uses only <code>x-client-id</code>. Safe for React, Vue, Mobile apps, or static websites.</p>
+
+    <div class="form-group">
+      <label>Payment Hub Base URL</label>
+      <input type="text" id="hubUrl" value="http://localhost:3000/api/v1">
+    </div>
+
+    <div class="form-group">
+      <label>Public Client ID (from /apps)</label>
+      <input type="text" id="clientId" placeholder="pub_live_app001_xxxx">
+    </div>
+
+    <div class="row">
+      <div class="form-group">
+        <label>Amount (₹)</label>
+        <input type="number" id="amount" value="10.00" step="0.5">
+      </div>
+      <div class="form-group">
+        <label>Customer Phone</label>
+        <input type="text" id="phone" value="9876543210">
+      </div>
+    </div>
+
+    <button class="btn" id="payBtn" onclick="startPayment()">Pay Now</button>
+
+    <div id="log">Logs will appear here...</div>
+  </div>
+
+  <script>
+    function log(msg) {
+      const el = document.getElementById("log");
+      el.textContent += `[${new Date().toLocaleTimeString()}] ${msg}\n`;
+      el.scrollTop = el.scrollHeight;
+    }
+
+    async function startPayment() {
+      const hubUrl = document.getElementById("hubUrl").value.trim().replace(/\/$/, "");
+      const clientId = document.getElementById("clientId").value.trim();
+      const amount = parseFloat(document.getElementById("amount").value);
+      const phone = document.getElementById("phone").value.trim();
+      const btn = document.getElementById("payBtn");
+
+      if (!clientId) {
+        alert("Please enter your Public Client ID (created in /apps)");
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = "Processing...";
+      const orderId = `TEST_${Date.now()}`;
+
+      try {
+        log(`1. Calling POST ${hubUrl}/orders with x-client-id...`);
+        const res = await fetch(`${hubUrl}/orders`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-client-id": clientId,
+          },
+          body: JSON.stringify({
+            order_id: orderId,
+            order_amount: amount,
+            order_currency: "INR",
+            customer_details: {
+              customer_id: `CUST_${phone}`,
+              customer_phone: phone,
+              customer_name: "Test Customer",
+              customer_email: "test@example.com"
+            },
+            order_note: "Browser Client-Only Test"
+          })
+        });
+
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          throw new Error(data.error || "Failed to create order");
+        }
+
+        const paymentSessionId = data.payment_session_id || data.order?.paymentSessionId;
+        const cfOrderId = data.cf_order_id || data.order?.cfOrderId;
+
+        log(`2. Order created successfully!`);
+        log(`   cfOrderId: ${cfOrderId}`);
+        log(`   paymentSessionId: ${paymentSessionId.substring(0, 25)}...`);
+
+        // Load Cashfree dropin
+        log(`3. Initializing Cashfree modal checkout...`);
+        const cashfree = Cashfree({ mode: "sandbox" });
+
+        await cashfree.checkout({
+          paymentSessionId: paymentSessionId,
+          redirectTarget: "_modal"
+        });
+
+        log(`4. Modal closed. Polling order status via GET ${hubUrl}/orders/${orderId}/status...`);
+        pollStatus(hubUrl, clientId, orderId);
+
+      } catch (err) {
+        log(`❌ Error: ${err.message}`);
+        btn.disabled = false;
+        btn.textContent = "Pay Now";
+      }
+    }
+
+    function pollStatus(hubUrl, clientId, orderId) {
+      const btn = document.getElementById("payBtn");
+      let attempts = 0;
+      const timer = setInterval(async () => {
+        attempts++;
+        try {
+          const res = await fetch(`${hubUrl}/orders/${orderId}/status`, {
+            headers: { "x-client-id": clientId }
+          });
+          const data = await res.json();
+          log(`   [Attempt ${attempts}] Status: ${data.status}`);
+
+          if (data.status === "PAID" || attempts >= 8) {
+            clearInterval(timer);
+            btn.disabled = false;
+            btn.textContent = "Pay Now";
+            if (data.status === "PAID") {
+              log(`🎉 Payment Successful! Reference: ${data.latest_payment?.cfPaymentId || 'N/A'}`);
+            } else {
+              log(`ℹ️ Polling finished. Current status is ${data.status}`);
+            }
+          }
+        } catch (e) {
+          clearInterval(timer);
+          btn.disabled = false;
+          btn.textContent = "Pay Now";
+          log(`❌ Polling error: ${e.message}`);
+        }
+      }, 2000);
+    }
+  </script>
+</body>
+</html>
+

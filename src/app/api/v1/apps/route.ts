@@ -7,11 +7,19 @@ import { z } from "zod";
 const createAppSchema = z.object({
   appCode: z
     .string()
+    .trim()
     .min(2)
     .max(20)
-    .regex(/^[A-Z0-9_]+$/, "App Code must be uppercase alphanumeric and underscores"),
-  appName: z.string().min(2).max(100),
-  webhookUrl: z.string().url().optional(),
+    .regex(/^[A-Za-z0-9_]+$/, "App Code must be uppercase alphanumeric and underscores")
+    .transform((val) => val.toUpperCase()),
+  appName: z.string().trim().min(2).max(100),
+  webhookUrl: z
+    .string()
+    .trim()
+    .url("Webhook URL must be a valid URL")
+    .optional()
+    .or(z.literal(""))
+    .nullable(),
 });
 
 export async function GET(req: NextRequest) {

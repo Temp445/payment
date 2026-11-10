@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { OutboxWorker } from "@/lib/outboxWorker";
+import { verifyAdminAuth } from "@/lib/auth";
+import { getCachedAdminApiKey } from "@/lib/config";
 
 export async function GET(req: NextRequest) {
   return handleOutboxProcess(req);
@@ -10,15 +12,14 @@ export async function POST(req: NextRequest) {
 }
 
 async function handleOutboxProcess(req: NextRequest) {
-  // Allow trigger via authorization header or internal query token
+  // Allow trigger via authorization header (used by pg_net trigger) or internal query token (?key=...)
   const authHeader = req.headers.get("authorization");
   const authKey = req.nextUrl.searchParams.get("key");
-  const masterKey = process.env.ADMIN_API_KEY;
 
   const isAuthorized =
-    !masterKey ||
-    (authHeader && authHeader.replace(/^Bearer\s+/i, "") === masterKey) ||
-    authKey === masterKey;
+    verifyAdminAuth(authHeader) ||
+    (authKey && authKey.trim() === getCachedAdminApiKey().trim()) ||
+    (authKey && authKey.trim() === (process.env.ADMIN_API_KEY || "").trim());
 
   if (!isAuthorized) {
     return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });

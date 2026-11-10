@@ -18,6 +18,8 @@ import {
   FileCode,
   Atom,
   Zap,
+  Bot,
+  Sparkles,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -73,11 +75,475 @@ function CodeBlock({ title, code, filePath }: CodeBlockProps) {
   );
 }
 
+const NEXTJS_AI_AGENT_PROMPT = `You are an expert Next.js developer. Integrate Central Payment Hub checkout into this Next.js application by following these instructions step-by-step. Implement all files, install dependencies, and configure environment variables automatically without asking any clarifying questions:
+
+### Step 1: Install Cashfree SDK
+Run this command in the project terminal:
+npm install @cashfreepayments/cashfree-js
+
+### Step 2: Configure Environment Variables
+Add the following configuration to the application's ".env.local" file:
+# Central Payment Hub Client Configuration
+# (Replace <YOUR_PUBLIC_CLIENT_ID> with your registered Client ID from Central Payment Hub /apps)
+NEXT_PUBLIC_PAYMENT_HUB_URL="http://localhost:3000/api/v1"
+NEXT_PUBLIC_PAYMENT_HUB_CLIENT_ID="<YOUR_PUBLIC_CLIENT_ID>"
+
+### Step 3: Create Next.js Hook (hooks/usePaymentHub.ts)
+Create the file "hooks/usePaymentHub.ts" (or "src/hooks/usePaymentHub.ts"):
+\`\`\`typescript
+"use client";
+
+import { useState } from "react";
+import { load } from "@cashfreepayments/cashfree-js";
+
+export interface InitiatePaymentParams {
+  orderId?: string;
+  amount: number;
+  customerPhone?: string;
+  customerName?: string;
+  customerEmail?: string;
+  orderNote?: string;
+  onSuccess?: (paymentId: string) => void;
+  onFailure?: (error: string) => void;
+}
+
+export function usePaymentHub() {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const pay = async ({
+    orderId = \`ORD_\${Date.now()}_\${Math.floor(Math.random() * 1000)}\`,
+    amount,
+    customerPhone = "9876543210",
+    customerName = "Valued Customer",
+    customerEmail = "customer@example.com",
+    orderNote = "Next.js Web Order",
+    onSuccess,
+    onFailure,
+  }: InitiatePaymentParams) => {
+    setLoading(true);
+    setError(null);
+
+    const hubUrl =
+      process.env.NEXT_PUBLIC_PAYMENT_HUB_URL || "http://localhost:3000/api/v1";
+    const clientId =
+      process.env.NEXT_PUBLIC_PAYMENT_HUB_CLIENT_ID || "";
+
+    try {
+      // 1. Direct browser call to Central Payment Hub (CORS is enabled)
+      const res = await fetch(\`\${hubUrl}/orders\`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-client-id": clientId,
+        },
+        body: JSON.stringify({
+          order_id: orderId,
+          order_amount: Number(amount),
+          order_currency: "INR",
+          customer_details: {
+            customer_id: \`CUST_\${customerPhone}\`,
+            customer_phone: customerPhone,
+            customer_name: customerName,
+            customer_email: customerEmail,
+          },
+          order_note: orderNote,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to create payment session");
+      }
+
+      const paymentSessionId = data.payment_session_id || data.order?.paymentSessionId;
+      if (!paymentSessionId) {
+        throw new Error("Missing paymentSessionId from payment hub response");
+      }
+
+      // 2. Load Cashfree Checkout Modal SDK
+      const cashfree = await load({
+        mode: process.env.NODE_ENV === "production" ? "production" : "sandbox",
+      });
+
+      // 3. Mount Drop-in Modal
+      const checkoutResult = await cashfree.checkout({
+        paymentSessionId: paymentSessionId,
+        redirectTarget: "_modal",
+      });
+
+      if (checkoutResult.error) {
+        throw new Error(checkoutResult.error.message || "Payment cancelled");
+      }
+
+      // 4. Poll payment status to confirm
+      pollPaymentStatus(orderId, hubUrl, clientId, onSuccess, onFailure);
+    } catch (err: any) {
+      setError(err.message || "Payment failed to launch");
+      if (onFailure) onFailure(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const pollPaymentStatus = (
+    orderId: string,
+    hubUrl: string,
+    clientId: string,
+    onSuccess?: (id: string) => void,
+    onFailure?: (err: string) => void
+  ) => {
+    let attempts = 0;
+    const interval = setInterval(async () => {
+      attempts++;
+      try {
+        const res = await fetch(\`\${hubUrl}/orders/\${orderId}/status\`, {
+          headers: { "x-client-id": clientId },
+        });
+        const data = await res.json();
+
+        if (data.status === "PAID") {
+          clearInterval(interval);
+          if (onSuccess) onSuccess(data.latest_payment?.cfPaymentId || "CONFIRMED");
+        } else if (attempts >= 6) {
+          clearInterval(interval);
+          if (onSuccess) onSuccess("PENDING_VERIFICATION");
+        }
+      } catch (err: any) {
+        clearInterval(interval);
+        if (onFailure) onFailure("Status polling failed");
+      }
+    }, 1500);
+  };
+
+  return { pay, loading, error };
+}
+\`\`\`
+
+### Step 4: Create Next.js Component (components/CheckoutButton.tsx)
+Create the file "components/CheckoutButton.tsx" (or "src/components/CheckoutButton.tsx"):
+\`\`\`tsx
+"use client";
+
+import React, { useState } from "react";
+import { usePaymentHub } from "@/hooks/usePaymentHub";
+
+interface CheckoutButtonProps {
+  amount: number;
+  customerPhone?: string;
+  customerName?: string;
+  customerEmail?: string;
+  orderNote?: string;
+  onSuccess?: (paymentId: string) => void;
+  className?: string;
+}
+
+export function CheckoutButton({
+  amount,
+  customerPhone = "9876543210",
+  customerName = "Customer",
+  customerEmail = "customer@example.com",
+  orderNote = "Next.js Web Order Payment",
+  onSuccess,
+  className,
+}: CheckoutButtonProps) {
+  const { pay, loading, error } = usePaymentHub();
+  const [receipt, setReceipt] = useState<string | null>(null);
+
+  const handleCheckout = () => {
+    setReceipt(null);
+    pay({
+      amount,
+      customerPhone,
+      customerName,
+      customerEmail,
+      orderNote,
+      onSuccess: (paymentId) => {
+        setReceipt(\`🎉 Payment Confirmed! Ref ID: \${paymentId}\`);
+        if (onSuccess) onSuccess(paymentId);
+      },
+      onFailure: (err) => {
+        console.error("Payment failed:", err);
+      },
+    });
+  };
+
+  return (
+    <div className="space-y-2">
+      <button
+        onClick={handleCheckout}
+        disabled={loading}
+        className={
+          className ||
+          "w-full py-3 px-6 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold transition shadow-md cursor-pointer"
+        }
+      >
+        {loading ? "Opening Cashfree..." : \`Pay ₹\${amount} with Cashfree\`}
+      </button>
+
+      {receipt && (
+        <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-medium">
+          {receipt}
+        </div>
+      )}
+
+      {error && (
+        <div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs font-medium">
+          ❌ {error}
+        </div>
+      )}
+    </div>
+  );
+}
+\`\`\`
+
+### Step 5: Integration & Rules
+- Do NOT ask for clientSecret, database connection strings, or backend credentials (browser client uses only NEXT_PUBLIC_PAYMENT_HUB_CLIENT_ID).
+- Locate the main pricing, checkout, or cart page in this Next.js app and wire <CheckoutButton amount={...} /> into it.`;
+
+const REACT_AI_AGENT_PROMPT = `You are an expert React frontend developer. Integrate Central Payment Hub checkout into this React application by following these instructions step-by-step. Implement all files, install dependencies, and configure environment variables automatically without asking any clarifying questions:
+
+### Step 1: Install Cashfree SDK
+Run this command in the project terminal:
+npm install @cashfreepayments/cashfree-js
+
+### Step 2: Configure Environment Variables
+Add the following configuration to the application's ".env" file:
+# Central Payment Hub Client Configuration (Vite & CRA)
+# (Replace <YOUR_PUBLIC_CLIENT_ID> with your registered Client ID from Central Payment Hub /apps)
+VITE_PAYMENT_HUB_URL="http://localhost:3000/api/v1"
+VITE_PAYMENT_HUB_CLIENT_ID="<YOUR_PUBLIC_CLIENT_ID>"
+
+# For Create-React-App (CRA):
+REACT_APP_PAYMENT_HUB_URL="http://localhost:3000/api/v1"
+REACT_APP_PAYMENT_HUB_CLIENT_ID="<YOUR_PUBLIC_CLIENT_ID>"
+
+### Step 3: Create React Hook (src/hooks/usePaymentHub.ts)
+Create the file "src/hooks/usePaymentHub.ts":
+\`\`\`typescript
+import { useState } from "react";
+import { load } from "@cashfreepayments/cashfree-js";
+
+export interface InitiatePaymentParams {
+  orderId?: string;
+  amount: number;
+  customerPhone?: string;
+  customerName?: string;
+  customerEmail?: string;
+  orderNote?: string;
+  onSuccess?: (paymentId: string) => void;
+  onFailure?: (error: string) => void;
+}
+
+export function usePaymentHub() {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const pay = async ({
+    orderId = \`ORD_\${Date.now()}_\${Math.floor(Math.random() * 1000)}\`,
+    amount,
+    customerPhone = "9876543210",
+    customerName = "Valued Customer",
+    customerEmail = "customer@example.com",
+    orderNote = "React Store Checkout",
+    onSuccess,
+    onFailure,
+  }: InitiatePaymentParams) => {
+    setLoading(true);
+    setError(null);
+
+    // Read Vite or CRA environment variables
+    const hubUrl =
+      (typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_PAYMENT_HUB_URL) ||
+      (typeof process !== "undefined" && process.env?.REACT_APP_PAYMENT_HUB_URL) ||
+      "http://localhost:3000/api/v1";
+
+    const clientId =
+      (typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_PAYMENT_HUB_CLIENT_ID) ||
+      (typeof process !== "undefined" && process.env?.REACT_APP_PAYMENT_HUB_CLIENT_ID) ||
+      "";
+
+    try {
+      // 1. Direct browser call to Central Payment Hub (CORS is enabled)
+      const res = await fetch(\`\${hubUrl}/orders\`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-client-id": clientId,
+        },
+        body: JSON.stringify({
+          order_id: orderId,
+          order_amount: Number(amount),
+          order_currency: "INR",
+          customer_details: {
+            customer_id: \`CUST_\${customerPhone}\`,
+            customer_phone: customerPhone,
+            customer_name: customerName,
+            customer_email: customerEmail,
+          },
+          order_note: orderNote,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to create payment session");
+      }
+
+      const paymentSessionId = data.payment_session_id || data.order?.paymentSessionId;
+      if (!paymentSessionId) {
+        throw new Error("Missing paymentSessionId from payment hub response");
+      }
+
+      // 2. Load Cashfree Checkout Modal SDK
+      const isProd =
+        (typeof import.meta !== "undefined" && (import.meta as any).env?.PROD) ||
+        (typeof process !== "undefined" && process.env?.NODE_ENV === "production");
+
+      const cashfree = await load({
+        mode: isProd ? "production" : "sandbox",
+      });
+
+      // 3. Mount Drop-in Modal
+      const checkoutResult = await cashfree.checkout({
+        paymentSessionId: paymentSessionId,
+        redirectTarget: "_modal",
+      });
+
+      if (checkoutResult.error) {
+        throw new Error(checkoutResult.error.message || "Payment cancelled");
+      }
+
+      // 4. Poll payment status to confirm
+      pollPaymentStatus(orderId, hubUrl, clientId, onSuccess, onFailure);
+    } catch (err: any) {
+      setError(err.message || "Payment failed to launch");
+      if (onFailure) onFailure(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const pollPaymentStatus = (
+    orderId: string,
+    hubUrl: string,
+    clientId: string,
+    onSuccess?: (id: string) => void,
+    onFailure?: (err: string) => void
+  ) => {
+    let attempts = 0;
+    const interval = setInterval(async () => {
+      attempts++;
+      try {
+        const res = await fetch(\`\${hubUrl}/orders/\${orderId}/status\`, {
+          headers: { "x-client-id": clientId },
+        });
+        const data = await res.json();
+
+        if (data.status === "PAID") {
+          clearInterval(interval);
+          if (onSuccess) onSuccess(data.latest_payment?.cfPaymentId || "CONFIRMED");
+        } else if (attempts >= 6) {
+          clearInterval(interval);
+          if (onSuccess) onSuccess("PENDING_VERIFICATION");
+        }
+      } catch (err: any) {
+        clearInterval(interval);
+        if (onFailure) onFailure("Status polling failed");
+      }
+    }, 1500);
+  };
+
+  return { pay, loading, error };
+}
+\`\`\`
+
+### Step 4: Create React Component (src/components/CheckoutButton.tsx)
+Create the file "src/components/CheckoutButton.tsx":
+\`\`\`tsx
+import React, { useState } from "react";
+import { usePaymentHub } from "../hooks/usePaymentHub";
+
+interface CheckoutButtonProps {
+  amount: number;
+  customerPhone?: string;
+  customerName?: string;
+  customerEmail?: string;
+  orderNote?: string;
+  onSuccess?: (paymentId: string) => void;
+  className?: string;
+}
+
+export function CheckoutButton({
+  amount,
+  customerPhone = "9876543210",
+  customerName = "Customer",
+  customerEmail = "customer@example.com",
+  orderNote = "React App Checkout",
+  onSuccess,
+  className,
+}: CheckoutButtonProps) {
+  const { pay, loading, error } = usePaymentHub();
+  const [receipt, setReceipt] = useState<string | null>(null);
+
+  const handleCheckout = () => {
+    setReceipt(null);
+    pay({
+      amount,
+      customerPhone,
+      customerName,
+      customerEmail,
+      orderNote,
+      onSuccess: (paymentId) => {
+        setReceipt(\`🎉 Payment Confirmed! Ref ID: \${paymentId}\`);
+        if (onSuccess) onSuccess(paymentId);
+      },
+      onFailure: (err) => {
+        console.error("Payment failed:", err);
+      },
+    });
+  };
+
+  return (
+    <div className="space-y-2">
+      <button
+        onClick={handleCheckout}
+        disabled={loading}
+        className={
+          className ||
+          "w-full py-3 px-6 rounded-xl bg-cyan-500 hover:bg-cyan-400 disabled:opacity-50 text-slate-950 font-bold transition shadow-md cursor-pointer"
+        }
+      >
+        {loading ? "Opening Cashfree..." : \`Pay ₹\${amount} with Cashfree\`}
+      </button>
+
+      {receipt && (
+        <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-medium">
+          {receipt}
+        </div>
+      )}
+
+      {error && (
+        <div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs font-medium">
+          ❌ {error}
+        </div>
+      )}
+    </div>
+  );
+}
+\`\`\`
+
+### Step 5: Integration & Rules
+- Do NOT ask for backend server routes, backend database credentials, or secret keys (zero-backend browser integration).
+- Wire <CheckoutButton amount={...} /> into the main checkout or pricing component.`;
+
 export default function GuidePage() {
   const [framework, setFramework] = useState<"react" | "nextjs">("nextjs");
   const [nextjsMode, setNextjsMode] = useState<"client" | "fullstack">("client");
   const [activeTab, setActiveTab] = useState<string>("overview");
   const [copiedSnippet, setCopiedSnippet] = useState<string | null>(null);
+
+  const activeAiPrompt = framework === "nextjs" ? NEXTJS_AI_AGENT_PROMPT : REACT_AI_AGENT_PROMPT;
 
   const copyText = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
@@ -206,12 +672,63 @@ export default function GuidePage() {
           </div>
         )}
 
+        {/* AI AGENT ONE-SHOT BANNER */}
+        <div className="relative rounded-2xl bg-gradient-to-r from-purple-950/70 via-slate-900 to-indigo-950/60 border border-purple-500/30 p-5 shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-start gap-3.5">
+            <div className="p-2.5 rounded-xl bg-purple-500/20 text-purple-400 border border-purple-500/30 shrink-0">
+              <Bot className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-bold text-white flex items-center gap-1.5">
+                  {framework === "nextjs" ? "Next.js AI Auto-Integration Prompt" : "React AI Auto-Integration Prompt"}
+                </h3>
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                  <Sparkles className="w-2.5 h-2.5 text-purple-300" /> Cursor / Antigravity / Copilot
+                </span>
+              </div>
+              <p className="text-xs text-slate-300 mt-1 max-w-2xl leading-relaxed">
+                Copy this complete prompt into your AI coding assistant (Cursor, Antigravity, Claude Code, Copilot). It automatically creates the hook, checkout button, installs dependencies, and configures {framework === "nextjs" ? ".env.local (Next.js)" : ".env (React/Vite)"} in one shot without asking questions.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => copyText(activeAiPrompt, "ai-banner-prompt")}
+              className="px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold flex items-center gap-2 transition shadow-md shadow-purple-900/30"
+            >
+              {copiedSnippet === "ai-banner-prompt" ? (
+                <>
+                  <Check className="w-4 h-4 text-emerald-300" />
+                  <span>Prompt Copied!</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="w-4 h-4" />
+                  <span>Copy {framework === "nextjs" ? "Next.js" : "React"} Prompt</span>
+                </>
+              )}
+            </button>
+            <button
+              onClick={() => setActiveTab("ai-prompt")}
+              className={`px-3.5 py-2.5 rounded-xl text-xs font-semibold border transition ${
+                activeTab === "ai-prompt"
+                  ? "bg-slate-800 border-purple-500/50 text-purple-300"
+                  : "bg-slate-900/80 border-slate-700 text-slate-300 hover:bg-slate-800"
+              }`}
+            >
+              View Instructions
+            </button>
+          </div>
+        </div>
+
         {/* TABS SELECTOR */}
         <div className="flex flex-wrap items-center gap-2 border-b border-slate-800 pb-3">
           {framework === "nextjs" && nextjsMode === "client" && (
             <>
               {[
                 { id: "overview", label: "Overview & Flow" },
+                { id: "ai-prompt", label: "🤖 AI One-Shot Prompt" },
                 { id: "env", label: "1. Next.js .env.local (2 Variables)" },
                 { id: "hook", label: "2. React Payment Hook" },
                 { id: "component", label: "3. Client Checkout Component" },
@@ -236,6 +753,7 @@ export default function GuidePage() {
             <>
               {[
                 { id: "overview", label: "Overview & Flow" },
+                { id: "ai-prompt", label: "🤖 AI One-Shot Prompt" },
                 { id: "env", label: "1. Next.js Environment (5 Variables)" },
                 { id: "backend", label: "2. Server Order API" },
                 { id: "frontend", label: "3. Checkout Modal" },
@@ -261,6 +779,7 @@ export default function GuidePage() {
             <>
               {[
                 { id: "overview", label: "Overview & Architecture" },
+                { id: "ai-prompt", label: "🤖 AI One-Shot Prompt" },
                 { id: "env", label: "1. React Environment (.env)" },
                 { id: "hook", label: "2. React Payment Hook" },
                 { id: "component", label: "3. React Checkout Component" },
@@ -1064,6 +1583,48 @@ export function CheckoutPage() {
                 />
               </div>
             )}
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* AI ONE-SHOT AGENT PROMPT */}
+        {/* ========================================================================= */}
+        {activeTab === "ai-prompt" && (
+          <div className="space-y-6">
+            <div className="p-4 rounded-xl bg-purple-500/10 border border-purple-500/20 text-slate-200 text-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+              <div className="space-y-1">
+                <span className="font-bold text-purple-400">🤖 Hands-Free AI Integration Prompt:</span>
+                <p className="text-slate-300">
+                  Paste this exact prompt into your AI coding tool (Cursor Composer, Antigravity, Claude Code, GitHub Copilot Chat). The AI agent will automatically install <code>@cashfreepayments/cashfree-js</code>, create <code>hooks/usePaymentHub.ts</code>, create <code>components/CheckoutButton.tsx</code>, and wire the checkout without asking unwanted questions.
+                </p>
+              </div>
+              <button
+                onClick={() => copyText(activeAiPrompt, "ai-tab-prompt")}
+                className="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold flex items-center gap-1.5 transition shrink-0"
+              >
+                {copiedSnippet === "ai-tab-prompt" ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-emerald-300" />
+                    <span>Copied to Clipboard!</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3.5 h-3.5" />
+                    <span>Copy {framework === "nextjs" ? "Next.js" : "React"} Prompt</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            <CodeBlock
+              title={
+                framework === "nextjs"
+                  ? "Next.js AI Agent One-Shot Prompt (Copy & Paste)"
+                  : "Pure React AI Agent One-Shot Prompt (Copy & Paste)"
+              }
+              filePath={framework === "nextjs" ? "NEXTJS-AI-AGENT-PROMPT.md" : "REACT-AI-AGENT-PROMPT.md"}
+              code={activeAiPrompt}
+            />
           </div>
         )}
 

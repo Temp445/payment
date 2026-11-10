@@ -79,7 +79,11 @@ export default function ApplicationsPage() {
           "Content-Type": "application/json",
           Authorization: authHeader,
         },
-        body: JSON.stringify({ appCode, appName, webhookUrl }),
+        body: JSON.stringify({
+          appCode: appCode.trim(),
+          appName: appName.trim(),
+          webhookUrl: webhookUrl.trim() || undefined,
+        }),
       });
       const data = await res.json();
       if (data.success) {
@@ -89,7 +93,12 @@ export default function ApplicationsPage() {
         setAppName("");
         setWebhookUrl("");
       } else {
-        alert(data.error || "Failed to create application");
+        const detailMsg = data.details?.fieldErrors
+          ? Object.entries(data.details.fieldErrors)
+              .map(([field, errs]) => `${field}: ${(errs as string[]).join(", ")}`)
+              .join("; ")
+          : "";
+        alert(detailMsg ? `${data.error}: ${detailMsg}` : (data.error || "Failed to create application"));
       }
     } catch (err: any) {
       alert(err.message || "Error creating application");

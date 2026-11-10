@@ -36,7 +36,7 @@ export class OrderService {
   /**
    * Create an order and generate Cashfree payment session
    */
-  static async createOrder(app: AuthenticatedApp, input: CreateOrderInput) {
+  static async createOrder(app: AuthenticatedApp, input: CreateOrderInput, hubOrigin?: string) {
     const cfOrderId = this.formatCashfreeOrderId(app.appCode, input.order_id);
 
     // 1. Check for existing order (Idempotency)
@@ -103,7 +103,7 @@ export class OrderService {
         name: input.customer_details.customer_name,
       },
       returnUrl: input.order_meta?.return_url,
-      notifyUrl: input.order_meta?.notify_url,
+      notifyUrl: input.order_meta?.notify_url || (hubOrigin ? `${hubOrigin.replace(/\/$/, "")}/api/v1/webhooks/cashfree` : undefined),
       note: input.order_note,
     });
 

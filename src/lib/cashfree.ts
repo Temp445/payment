@@ -2,23 +2,33 @@ import { Cashfree } from "cashfree-pg";
 import crypto from "crypto";
 import axios from "axios";
 import { logger } from "./logger";
+import { getCachedHubUrl } from "./config";
 
 // Setup Cashfree SDK configuration
-const appId = process.env.CASHFREE_APP_ID || "TEST_APP_ID";
-const secretKey = process.env.CASHFREE_SECRET_KEY || "TEST_SECRET_KEY";
-const isProd = process.env.CASHFREE_ENV === "PRODUCTION";
+function getCashfreeConfig() {
+  const appId = (process.env.CASHFREE_APP_ID || "").trim();
+  const secretKey = (process.env.CASHFREE_SECRET_KEY || "").trim();
+  const isProd = (process.env.CASHFREE_ENV || "").trim().toUpperCase() === "PRODUCTION";
 
-Cashfree.XClientId = appId;
-Cashfree.XClientSecret = secretKey;
-Cashfree.XEnvironment = isProd
-  ? Cashfree.Environment.PRODUCTION
-  : Cashfree.Environment.SANDBOX;
+  Cashfree.XClientId = appId;
+  Cashfree.XClientSecret = secretKey;
+  Cashfree.XEnvironment = isProd
+    ? Cashfree.Environment.PRODUCTION
+    : Cashfree.Environment.SANDBOX;
+
+  const baseUrl = isProd
+    ? "https://api.cashfree.com/pg"
+    : "https://sandbox.cashfree.com/pg";
+
+  return { appId, secretKey, isProd, baseUrl };
+}
 
 export class CashfreeAdapter {
   private static apiVersion = "2023-08-01";
-  private static baseUrl = isProd
-    ? "https://api.cashfree.com/pg"
-    : "https://sandbox.cashfree.com/pg";
+
+  private static ensureConfigured() {
+    return getCashfreeConfig();
+  }
 
   /**
    * Create order session on Cashfree
@@ -38,6 +48,11 @@ export class CashfreeAdapter {
     note?: string;
   }) {
     try {
+      const config = this.ensureConfigured();
+      if (!config.appId || !config.secretKey) {
+        throw new Error("Cashfree credentials (CASHFREE_APP_ID, CASHFREE_SECRET_KEY) are missing in environment");
+      }
+
       const request = {
         order_id: params.cfOrderId,
         order_amount: params.orderAmount,
@@ -52,7 +67,7 @@ export class CashfreeAdapter {
           return_url: params.returnUrl,
           notify_url:
             params.notifyUrl ||
-            `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/v1/webhooks/cashfree`,
+            `${getCachedHubUrl()}/api/v1/webhooks/cashfree`,
         },
         order_note: params.note,
       };
@@ -62,7 +77,7 @@ export class CashfreeAdapter {
     } catch (error: any) {
       logger.error("CashfreeAdapter.createOrder failed", error?.response?.data || error);
       throw new Error(
-        error?.response?.data?.message || "Failed to create Cashfree order"
+        error?.response?.data?.message || error.message || "Failed to create Cashfree order"
       );
     }
   }
@@ -72,6 +87,7 @@ export class CashfreeAdapter {
    */
   static async getOrderPayments(cfOrderId: string) {
     try {
+      this.ensureConfigured();
       const response = await Cashfree.PGOrderFetchPayments(this.apiVersion, cfOrderId);
       return response.data;
     } catch (error: any) {
@@ -92,6 +108,7 @@ export class CashfreeAdapter {
     note?: string;
   }) {
     try {
+      this.ensureConfigured();
       const request = {
         refund_amount: params.refundAmount,
         refund_id: params.refundId,
@@ -117,7 +134,8 @@ export class CashfreeAdapter {
    */
   static async fetchSettlements(limit = 20) {
     try {
-      const response = await axios.get(`${this.baseUrl}/settlements`, {
+      const { appId, secretKey, baseUrl } = this.ensureConfigured();
+      const response = await axios.get(`${baseUrl}/settlements`, {
         headers: {
           "x-client-id": appId,
           "x-client-secret": secretKey,
@@ -147,6 +165,7 @@ export class CashfreeAdapter {
     }
 
     try {
+      const { secretKey } = this.ensureConfigured();
       const payload = `${timestamp}${rawBody}`;
       const expectedSignature = crypto
         .createHmac("sha256", secretKey)

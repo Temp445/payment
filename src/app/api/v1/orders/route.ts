@@ -60,7 +60,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const result = await OrderService.createOrder(app, validation.data);
+    const host = req.headers.get("x-forwarded-host") || req.headers.get("host");
+    const proto = req.headers.get("x-forwarded-proto") || (host?.includes("localhost") || host?.includes("127.0.0.1") ? "http" : "https");
+    const reqOrigin = host ? `${proto}://${host}` : undefined;
+
+    const result = await OrderService.createOrder(app, validation.data, reqOrigin);
     return NextResponse.json(result, { status: 201, headers: corsHeaders });
   } catch (error: any) {
     return NextResponse.json(

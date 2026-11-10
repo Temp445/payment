@@ -180,3 +180,12 @@ model AuditLog {
   @@map("audit_logs")
 }
 
+model PaymentHubConfig {
+  key       String   @id @db.VarChar(50)
+  value     String   @db.Text
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@map("payment_hub_config")
+}
+
+

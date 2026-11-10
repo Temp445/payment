@@ -96,16 +96,25 @@ export function clearAppAuthCache() {
   appAuthCache.clear();
 }
 
+import { getCachedAdminApiKey } from "./config";
+
+function safeCompare(a: string, b: string): boolean {
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  if (bufA.length !== bufB.length) return false;
+  return crypto.timingSafeEqual(bufA, bufB);
+}
+
 /**
- * Verify Master Admin API Key
+ * Verify Master Admin API Key against environment or dynamic database config
  */
 export function verifyAdminAuth(authHeader: string | null): boolean {
   if (!authHeader) return false;
   const token = authHeader.replace(/^Bearer\s+/i, "").trim();
-  const masterKey = process.env.ADMIN_API_KEY;
-  if (!masterKey) return false;
-  const tokenBuf = Buffer.from(token);
-  const masterBuf = Buffer.from(masterKey);
-  if (tokenBuf.length !== masterBuf.length) return false;
-  return crypto.timingSafeEqual(tokenBuf, masterBuf);
+  const envKey = process.env.ADMIN_API_KEY?.trim();
+  const dbKey = getCachedAdminApiKey()?.trim();
+
+  if (envKey && safeCompare(token, envKey)) return true;
+  if (dbKey && safeCompare(token, dbKey)) return true;
+  return false;
 }
