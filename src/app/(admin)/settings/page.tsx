@@ -16,15 +16,26 @@ import {
   EyeOff,
   Zap,
   Plus,
+  CreditCard,
+  ShieldCheck,
+  Activity,
 } from "lucide-react";
 
 export default function SettingsPage() {
   const [hubUrl, setHubUrl] = useState("");
   const [adminApiKey, setAdminApiKey] = useState("");
-  const [showKey, setShowKey] = useState(false);
+  const [cashfreeEnv, setCashfreeEnv] = useState<"TEST" | "PRODUCTION">("TEST");
+  const [cashfreeAppId, setCashfreeAppId] = useState("");
+  const [cashfreeSecretKey, setCashfreeSecretKey] = useState("");
+  const [cashfreeApiVersion, setCashfreeApiVersion] = useState("2023-08-01");
+
+  const [showAdminKey, setShowAdminKey] = useState(false);
+  const [showSecretKey, setShowSecretKey] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [testingConn, setTestingConn] = useState(false);
   const [statusMsg, setStatusMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [connMsg, setConnMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   const authHeader = `Bearer ${process.env.NEXT_PUBLIC_ADMIN_KEY || "admin_secret_hub_master_key_change_me"}`;
 
@@ -35,6 +46,7 @@ export default function SettingsPage() {
   async function fetchSettings() {
     setLoading(true);
     setStatusMsg(null);
+    setConnMsg(null);
     try {
       const res = await fetch("/api/v1/settings", {
         headers: { Authorization: authHeader },
@@ -43,6 +55,10 @@ export default function SettingsPage() {
       if (data.success && data.settings) {
         setHubUrl(data.settings.hubUrl || "");
         setAdminApiKey(data.settings.adminApiKey || "");
+        setCashfreeEnv(data.settings.cashfreeEnv === "PRODUCTION" ? "PRODUCTION" : "TEST");
+        setCashfreeAppId(data.settings.cashfreeAppId || "");
+        setCashfreeSecretKey(data.settings.cashfreeSecretKey || "");
+        setCashfreeApiVersion(data.settings.cashfreeApiVersion || "2023-08-01");
       } else {
         setStatusMsg({ type: "error", text: data.error || "Failed to load settings" });
       }
@@ -57,6 +73,7 @@ export default function SettingsPage() {
     e.preventDefault();
     setSaving(true);
     setStatusMsg(null);
+    setConnMsg(null);
 
     try {
       const res = await fetch("/api/v1/settings", {
@@ -68,6 +85,10 @@ export default function SettingsPage() {
         body: JSON.stringify({
           hubUrl: hubUrl.trim(),
           adminApiKey: adminApiKey.trim(),
+          cashfreeEnv,
+          cashfreeAppId: cashfreeAppId.trim(),
+          cashfreeSecretKey: cashfreeSecretKey.trim(),
+          cashfreeApiVersion: cashfreeApiVersion.trim(),
         }),
       });
 
@@ -75,11 +96,15 @@ export default function SettingsPage() {
       if (data.success) {
         setStatusMsg({
           type: "success",
-          text: "Settings successfully saved to database! Multi-URL triggers and runtime updated.",
+          text: "Settings successfully saved to database! Cashfree credentials and Hub URLs updated live.",
         });
         if (data.settings) {
           setHubUrl(data.settings.hubUrl);
           setAdminApiKey(data.settings.adminApiKey);
+          setCashfreeEnv(data.settings.cashfreeEnv === "PRODUCTION" ? "PRODUCTION" : "TEST");
+          setCashfreeAppId(data.settings.cashfreeAppId);
+          setCashfreeSecretKey(data.settings.cashfreeSecretKey);
+          setCashfreeApiVersion(data.settings.cashfreeApiVersion);
         }
       } else {
         const detailMsg = data.details?.fieldErrors
@@ -96,6 +121,35 @@ export default function SettingsPage() {
       setStatusMsg({ type: "error", text: err.message || "Failed to save settings" });
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleTestConnection() {
+    setTestingConn(true);
+    setConnMsg(null);
+    try {
+      const res = await fetch("/api/v1/settings?test_connection=true", {
+        headers: { Authorization: authHeader },
+      });
+      const data = await res.json();
+      if (data.success && data.connectionStatus === "CONNECTED") {
+        setConnMsg({
+          type: "success",
+          text: "✅ Cashfree gateway connection verified successfully! Credentials are active and valid.",
+        });
+      } else {
+        setConnMsg({
+          type: "error",
+          text: `❌ ${data.error || "Connection test failed. Please verify your App ID and Secret Key."}`,
+        });
+      }
+    } catch (err: any) {
+      setConnMsg({
+        type: "error",
+        text: `❌ Connection error: ${err.message}`,
+      });
+    } finally {
+      setTestingConn(false);
     }
   }
 
@@ -136,11 +190,10 @@ export default function SettingsPage() {
         <div className="p-4 rounded-xl bg-blue-950/30 border border-blue-800/40 flex items-start gap-3">
           <Database className="w-5 h-5 text-blue-400 mt-0.5 shrink-0" />
           <div className="text-xs space-y-1">
-            <h3 className="font-semibold text-blue-200">Database-Backed Multi-URL Runtime Configuration</h3>
+            <h3 className="font-semibold text-blue-200">Database-Backed Dynamic Configuration</h3>
             <p className="text-slate-300 leading-relaxed">
-              Values saved here are stored directly in your Supabase PostgreSQL table (<code className="text-blue-300">payment_hub_config</code>).
-              You can list multiple URLs separated by commas (e.g. <code className="text-blue-300">http://localhost:3000, http://localhost:3002</code>).
-              Supabase&apos;s real-time <code className="text-blue-300">pg_net</code> database trigger will dispatch events to all running URLs without requiring .env edits or redeployment.
+              All credentials and URLs configured here are saved directly to your database (<code className="text-blue-300">payment_hub_config</code>).
+              You can switch between <strong>Cashfree Sandbox and Production</strong>, change App IDs, update Secret Keys, or manage multi-port URLs live without editing <code className="text-blue-300">.env</code> files or restarting your server.
             </p>
           </div>
         </div>
@@ -171,8 +224,142 @@ export default function SettingsPage() {
             </div>
           ) : (
             <form onSubmit={handleSave} className="space-y-6 text-xs">
-              {/* Hub URL Field */}
-              <div className="space-y-2">
+              {/* SECTION 1: CASHFREE GATEWAY CREDENTIALS */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between pb-2 border-b border-[var(--border)]">
+                  <div className="flex items-center gap-2">
+                    <CreditCard className="w-4 h-4 text-emerald-400" />
+                    <h3 className="font-bold text-sm text-[var(--foreground)]">
+                      Cashfree Payment Gateway Credentials
+                    </h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleTestConnection}
+                    disabled={testingConn || !cashfreeAppId || !cashfreeSecretKey}
+                    className="px-3 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[11px] font-semibold flex items-center gap-1.5 transition disabled:opacity-40"
+                  >
+                    {testingConn ? (
+                      <>
+                        <RefreshCw className="w-3 h-3 animate-spin" />
+                        Testing...
+                      </>
+                    ) : (
+                      <>
+                        <Activity className="w-3 h-3" />
+                        Test Connection
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {connMsg && (
+                  <div
+                    className={`p-3 rounded-lg border text-xs flex items-center gap-2 ${
+                      connMsg.type === "success"
+                        ? "bg-emerald-950/40 border-emerald-800 text-emerald-300"
+                        : "bg-rose-950/40 border-rose-800 text-rose-300"
+                    }`}
+                  >
+                    <span>{connMsg.text}</span>
+                  </div>
+                )}
+
+                {/* Environment Selector */}
+                <div className="space-y-1.5">
+                  <label className="font-semibold text-[var(--foreground)]">
+                    Gateway Environment (CASHFREE_ENV)
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <label className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 cursor-pointer text-xs">
+                      <input
+                        type="radio"
+                        name="cashfreeEnv"
+                        value="TEST"
+                        checked={cashfreeEnv === "TEST"}
+                        onChange={() => setCashfreeEnv("TEST")}
+                        className="text-blue-600 focus:ring-0"
+                      />
+                      <span className="text-slate-200 font-medium">🧪 TEST / Sandbox</span>
+                      <span className="text-[10px] text-slate-400">(sandbox.cashfree.com)</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 cursor-pointer text-xs">
+                      <input
+                        type="radio"
+                        name="cashfreeEnv"
+                        value="PRODUCTION"
+                        checked={cashfreeEnv === "PRODUCTION"}
+                        onChange={() => setCashfreeEnv("PRODUCTION")}
+                        className="text-emerald-600 focus:ring-0"
+                      />
+                      <span className="text-slate-200 font-medium">🚀 PRODUCTION / Live</span>
+                      <span className="text-[10px] text-slate-400">(api.cashfree.com)</span>
+                    </label>
+                  </div>
+                </div>
+
+                {/* App ID & API Version Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="sm:col-span-2 space-y-1.5">
+                    <label className="font-semibold text-[var(--foreground)]">
+                      Cashfree App ID (CASHFREE_APP_ID)
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={cashfreeAppId}
+                      onChange={(e) => setCashfreeAppId(e.target.value)}
+                      placeholder="e.g. TEST11326003a6f87f6f965fe030062311"
+                      className="w-full px-3.5 py-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)] font-mono focus:outline-none focus:border-blue-500 transition text-xs"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="font-semibold text-[var(--foreground)]">
+                      API Version
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={cashfreeApiVersion}
+                      onChange={(e) => setCashfreeApiVersion(e.target.value)}
+                      placeholder="2023-08-01"
+                      className="w-full px-3.5 py-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)] font-mono focus:outline-none focus:border-blue-500 transition text-xs"
+                    />
+                  </div>
+                </div>
+
+                {/* Secret Key */}
+                <div className="space-y-1.5">
+                  <label className="font-semibold text-[var(--foreground)]">
+                    Cashfree Secret Key (CASHFREE_SECRET_KEY)
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showSecretKey ? "text" : "password"}
+                      required
+                      value={cashfreeSecretKey}
+                      onChange={(e) => setCashfreeSecretKey(e.target.value)}
+                      placeholder="cfsk_ma_test_..."
+                      className="w-full px-3.5 py-2.5 pr-10 rounded-lg bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)] font-mono focus:outline-none focus:border-blue-500 transition text-xs"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowSecretKey(!showSecretKey)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+                    >
+                      {showSecretKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-[var(--muted-foreground)]">
+                    Kept securely in database and used by the Central Hub to sign orders and verify Cashfree webhooks.
+                  </p>
+                </div>
+              </div>
+
+              {/* SECTION 2: HUB PUBLIC BASE URLS */}
+              <div className="space-y-2 pt-4 border-t border-[var(--border)]">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <label className="font-semibold text-[var(--foreground)] flex items-center gap-1.5">
                     <Globe className="w-4 h-4 text-blue-400" />
@@ -215,8 +402,8 @@ export default function SettingsPage() {
                 </p>
               </div>
 
-              {/* Admin API Key Field */}
-              <div className="space-y-2 pt-2 border-t border-[var(--border)]">
+              {/* SECTION 3: MASTER ADMIN API KEY */}
+              <div className="space-y-2 pt-4 border-t border-[var(--border)]">
                 <div className="flex items-center justify-between">
                   <label className="font-semibold text-[var(--foreground)] flex items-center gap-1.5">
                     <Key className="w-4 h-4 text-amber-400" />
@@ -233,7 +420,7 @@ export default function SettingsPage() {
                 </div>
                 <div className="relative">
                   <input
-                    type={showKey ? "text" : "password"}
+                    type={showAdminKey ? "text" : "password"}
                     required
                     minLength={8}
                     value={adminApiKey}
@@ -243,10 +430,10 @@ export default function SettingsPage() {
                   />
                   <button
                     type="button"
-                    onClick={() => setShowKey(!showKey)}
+                    onClick={() => setShowAdminKey(!showAdminKey)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
                   >
-                    {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    {showAdminKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
                 <p className="text-[11px] text-[var(--muted-foreground)]">
@@ -291,15 +478,18 @@ export default function SettingsPage() {
         {/* Architecture Details */}
         <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-5 text-xs text-[var(--muted-foreground)] space-y-3">
           <h4 className="font-semibold text-[var(--foreground)] flex items-center gap-2">
-            <Zap className="w-4 h-4 text-emerald-400" />
-            Multi-URL & Multi-Port Auto-Routing
+            <ShieldCheck className="w-4 h-4 text-emerald-400" />
+            Dynamic Multi-Gateway Architecture
           </h4>
           <ul className="list-disc list-inside space-y-1.5 pl-1 leading-relaxed">
             <li>
-              <strong>Automatic Request Origin</strong>: When a client creates an order on port <code className="text-slate-300">3002</code>, Cashfree&apos;s webhook automatically targets <code className="text-slate-300">http://localhost:3002/api/v1/webhooks/cashfree</code>. If on <code className="text-slate-300">3000</code>, it targets <code className="text-slate-300">3000</code>.
+              <strong>Instant Environment Switching</strong>: Toggle between <strong>TEST / Sandbox</strong> and <strong>PRODUCTION / Live</strong> without editing code or restarting servers.
             </li>
             <li>
-              <strong>Supabase Multi-Dispatch</strong>: When listing multiple comma-separated URLs in <code className="text-slate-300">payment_hub_config</code>, Supabase&apos;s trigger sends the event to all configured URLs. The currently running server processes the delivery, while inactive ports fail quietly without errors.
+              <strong>Database Overrides .env</strong>: Any credentials saved here take immediate priority over <code className="text-slate-300">.env</code>. If fields are left empty, the system automatically falls back to your environment variables.
+            </li>
+            <li>
+              <strong>Automatic Request Origin</strong>: When creating checkout sessions, the Payment Hub dynamically binds to whichever port or domain received the order (e.g. <code className="text-slate-300">3000</code> or <code className="text-slate-300">3002</code>).
             </li>
           </ul>
         </div>

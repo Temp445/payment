@@ -163,7 +163,7 @@ export class OrderService {
   }
 
   /**
-   * Lightweight endpoint for Mobile SDK polling
+   * Lightweight endpoint for Mobile SDK and Client polling
    */
   static async getOrderStatus(app: AuthenticatedApp, orderId: string) {
     const order = await prisma.order.findFirst({
@@ -172,6 +172,7 @@ export class OrderService {
         appOrderId: orderId,
       },
       select: {
+        id: true,
         appOrderId: true,
         cfOrderId: true,
         orderStatus: true,
@@ -192,6 +193,58 @@ export class OrderService {
     });
 
     if (!order) return null;
+
+    // If order is still ACTIVE on localhost (where webhooks cannot reach), verify directly with Cashfree
+    if (order.orderStatus === "ACTIVE" && order.cfOrderId) {
+      try {
+        const cfPayments = await CashfreeAdapter.getOrderPayments(order.cfOrderId);
+        if (Array.isArray(cfPayments) && cfPayments.length > 0) {
+          const successPayment = cfPayments.find(
+            (p: any) => p.payment_status === "SUCCESS"
+          );
+
+          if (successPayment) {
+            await prisma.order.update({
+              where: { id: order.id },
+              data: { orderStatus: "PAID" },
+            });
+
+            const paymentAmount = successPayment.payment_amount ?? Number(order.orderAmount);
+            const paymentRecord = await prisma.payment.upsert({
+              where: { cfPaymentId: String(successPayment.cf_payment_id) },
+              update: {
+                paymentStatus: "SUCCESS",
+                paymentAmount: paymentAmount,
+                paymentMethod: successPayment.payment_group || "OTHER",
+                bankReference: successPayment.bank_reference,
+              },
+              create: {
+                orderId: order.id,
+                cfPaymentId: String(successPayment.cf_payment_id),
+                paymentAmount: paymentAmount,
+                paymentStatus: "SUCCESS",
+                paymentMethod: successPayment.payment_group || "OTHER",
+                bankReference: successPayment.bank_reference,
+              },
+            });
+
+            order.orderStatus = "PAID";
+            order.payments = [
+              {
+                cfPaymentId: paymentRecord.cfPaymentId,
+                paymentStatus: paymentRecord.paymentStatus,
+                paymentMethod: paymentRecord.paymentMethod,
+                paymentTime: paymentRecord.paymentTime,
+                bankReference: paymentRecord.bankReference,
+              },
+            ];
+          }
+        }
+      } catch (err: any) {
+        // Fallback safely to current database state
+        logger.warn(`Cashfree real-time status check skipped: ${err.message}`);
+      }
+    }
 
     return {
       order_id: order.appOrderId,

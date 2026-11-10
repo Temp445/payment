@@ -14,31 +14,44 @@ export const dynamic = "force-dynamic";
 export default async function OverviewPage() {
   // Fetch real-time dashboard aggregates from Supabase via Prisma
   let totalVolume = 0;
+  let initiatedVolume = 0;
   let totalOrdersCount = 0;
   let paidOrdersCount = 0;
   let activeAppsCount = 0;
+  let totalAppsCount = 0;
   let pendingOutboxCount = 0;
   let recentOrders: any[] = [];
   let volumeChartData: any[] = [];
   let paymentMethodsData: any[] = [];
 
   try {
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+    sevenDaysAgo.setHours(0, 0, 0, 0);
+
     const [
       volumeAgg,
+      initiatedAgg,
       totalCount,
       paidCount,
-      appsCount,
+      activeApps,
+      totalApps,
       outboxCount,
       orders,
       payments,
+      recentPaidOrders,
     ] = await Promise.all([
       prisma.order.aggregate({
         where: { orderStatus: "PAID" },
         _sum: { orderAmount: true },
       }),
+      prisma.order.aggregate({
+        _sum: { orderAmount: true },
+      }),
       prisma.order.count(),
       prisma.order.count({ where: { orderStatus: "PAID" } }),
       prisma.application.count({ where: { isActive: true } }),
+      prisma.application.count(),
       prisma.webhookOutboxQueue.count({
         where: { status: { in: ["PENDING", "PROCESSING"] } },
       }),
@@ -55,15 +68,28 @@ export default async function OverviewPage() {
         where: { paymentStatus: "SUCCESS" },
         _count: true,
       }),
+      prisma.order.findMany({
+        where: {
+          orderStatus: "PAID",
+          createdAt: { gte: sevenDaysAgo },
+        },
+        select: {
+          orderAmount: true,
+          createdAt: true,
+        },
+      }),
     ]);
 
     totalVolume = Number(volumeAgg._sum.orderAmount || 0);
+    initiatedVolume = Number(initiatedAgg._sum.orderAmount || 0);
     totalOrdersCount = totalCount;
     paidOrdersCount = paidCount;
-    activeAppsCount = appsCount;
+    activeAppsCount = activeApps;
+    totalAppsCount = totalApps;
     pendingOutboxCount = outboxCount;
     recentOrders = orders;
 
+    // Real payment methods breakdown from actual successful payments
     paymentMethodsData = payments
       .filter((p) => p.paymentMethod)
       .map((p) => ({
@@ -71,24 +97,36 @@ export default async function OverviewPage() {
         value: p._count,
       }));
 
-    if (paymentMethodsData.length === 0) {
-      paymentMethodsData = [
-        { name: "UPI", value: 65 },
-        { name: "Card", value: 25 },
-        { name: "NetBanking", value: 10 },
-      ];
+    // Real 7-day transaction volume based strictly on database records
+    const dayMap: { [key: string]: { volume: number; orders: number } } = {};
+    const daysList: string[] = [];
+
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const dateKey = d.toISOString().split("T")[0];
+      dayMap[dateKey] = { volume: 0, orders: 0 };
+      daysList.push(dateKey);
     }
 
-    // Default sample curve if no transactions yet
-    volumeChartData = [
-      { date: "Mon", volume: totalVolume * 0.1 || 12000, orders: 12 },
-      { date: "Tue", volume: totalVolume * 0.15 || 18500, orders: 18 },
-      { date: "Wed", volume: totalVolume * 0.18 || 22000, orders: 24 },
-      { date: "Thu", volume: totalVolume * 0.22 || 31000, orders: 32 },
-      { date: "Fri", volume: totalVolume * 0.25 || 42000, orders: 40 },
-      { date: "Sat", volume: totalVolume * 0.3 || 49000, orders: 45 },
-      { date: "Today", volume: totalVolume * 0.35 || 55000, orders: 50 },
-    ];
+    recentPaidOrders.forEach((order) => {
+      const dateKey = new Date(order.createdAt).toISOString().split("T")[0];
+      if (dayMap[dateKey]) {
+        dayMap[dateKey].volume += Number(order.orderAmount);
+        dayMap[dateKey].orders += 1;
+      }
+    });
+
+    volumeChartData = daysList.map((dateKey, index) => {
+      const d = new Date(dateKey);
+      const isToday = index === daysList.length - 1;
+      const dayLabel = isToday ? "Today" : d.toLocaleDateString("en-US", { weekday: "short" });
+      return {
+        date: dayLabel,
+        volume: dayMap[dateKey].volume,
+        orders: dayMap[dateKey].orders,
+      };
+    });
   } catch (err) {
     console.error("Dashboard DB fetch error (may need migrations first):", err);
   }
@@ -96,7 +134,16 @@ export default async function OverviewPage() {
   const successRate =
     totalOrdersCount > 0
       ? `${((paidOrdersCount / totalOrdersCount) * 100).toFixed(1)}%`
-      : "100%";
+      : "0.0%";
+
+  const successRateTrend =
+    totalOrdersCount === 0
+      ? undefined
+      : paidOrdersCount > 0
+      ? `${paidOrdersCount} Paid`
+      : "0 Paid";
+
+  const successRatePositive = paidOrdersCount > 0;
 
   return (
     <>
@@ -107,29 +154,43 @@ export default async function OverviewPage() {
         <StatCard
           title="Total Processed GMV"
           value={formatCurrency(totalVolume)}
-          subtitle="Lifetime paid volume"
+          subtitle={
+            totalVolume > 0
+              ? "Lifetime paid revenue"
+              : initiatedVolume > 0
+              ? `${formatCurrency(initiatedVolume)} initiated (${totalOrdersCount} orders)`
+              : "No orders created yet"
+          }
           icon={DollarSign}
-          trend="+14.2%"
-          trendPositive={true}
         />
         <StatCard
           title="Success Rate"
           value={successRate}
-          subtitle={`${paidOrdersCount} of ${totalOrdersCount} orders`}
+          subtitle={`${paidOrdersCount} of ${totalOrdersCount} orders paid`}
           icon={Activity}
-          trend="Healthy"
-          trendPositive={true}
+          trend={successRateTrend}
+          trendPositive={successRatePositive}
         />
         <StatCard
           title="Active Tenant Apps"
           value={activeAppsCount}
-          subtitle="Out of 20 applications"
+          subtitle={
+            totalAppsCount === 0
+              ? "No applications configured"
+              : activeAppsCount === totalAppsCount
+              ? `All ${activeAppsCount} apps active`
+              : `${activeAppsCount} of ${totalAppsCount} apps active`
+          }
           icon={Layers}
         />
         <StatCard
           title="Pending Outbox Webhooks"
           value={pendingOutboxCount}
-          subtitle="Awaiting client app ack"
+          subtitle={
+            pendingOutboxCount === 0
+              ? "All webhooks delivered"
+              : `${pendingOutboxCount} awaiting dispatch`
+          }
           icon={Send}
         />
       </div>
@@ -140,7 +201,11 @@ export default async function OverviewPage() {
           <div className="flex items-center justify-between mb-4">
             <div>
               <h3 className="font-semibold text-sm text-[var(--foreground)]">Transaction Volume</h3>
-              <p className="text-xs text-[var(--muted-foreground)]">Processed volume across all 20 applications</p>
+              <p className="text-xs text-[var(--muted-foreground)]">
+                {activeAppsCount === 1
+                  ? "Processed volume for 1 active application"
+                  : `Processed volume across ${activeAppsCount} active applications`}
+              </p>
             </div>
             <span className="text-xs font-medium px-2 py-1 rounded bg-blue-500/10 text-blue-400">
               Live INR (₹)
@@ -162,8 +227,10 @@ export default async function OverviewPage() {
       <div className="p-5 rounded-xl border border-[var(--border)] bg-[var(--card)] shadow-sm space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="font-semibold text-sm text-[var(--foreground)]">Recent Transactions</h3>
-            <p className="text-xs text-[var(--muted-foreground)]">Live stream of incoming checkout orders</p>
+            <h3 className="font-semibold text-sm text-[var(--foreground)]">Recent Orders & Transactions</h3>
+            <p className="text-xs text-[var(--muted-foreground)]">
+              {paidOrdersCount} completed • {totalOrdersCount - paidOrdersCount} awaiting payment
+            </p>
           </div>
           <Link
             href="/orders"

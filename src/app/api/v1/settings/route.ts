@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAdminAuth } from "@/lib/auth";
 import { getHubConfig, saveHubConfig } from "@/lib/config";
+import { CashfreeAdapter } from "@/lib/cashfree";
 import { z } from "zod";
 
 const settingsSchema = z.object({
@@ -25,6 +26,14 @@ const settingsSchema = z.object({
     .trim()
     .min(8, "Admin API key must be at least 8 characters")
     .optional(),
+  cashfreeEnv: z
+    .enum(["TEST", "PRODUCTION"], {
+      errorMap: () => ({ message: "Cashfree environment must be TEST or PRODUCTION" }),
+    })
+    .optional(),
+  cashfreeAppId: z.string().trim().optional(),
+  cashfreeSecretKey: z.string().trim().optional(),
+  cashfreeApiVersion: z.string().trim().optional(),
 });
 
 export async function GET(req: NextRequest) {
@@ -35,6 +44,53 @@ export async function GET(req: NextRequest) {
     }
 
     const config = await getHubConfig();
+
+    // Check if test connection requested: /api/v1/settings?test_connection=true
+    const url = new URL(req.url);
+    if (url.searchParams.get("test_connection") === "true") {
+      try {
+        const { getCachedCashfreeConfig } = await import("@/lib/config");
+        const { appId, secretKey, apiVersion, baseUrl } = getCachedCashfreeConfig();
+
+        if (!appId || !secretKey) {
+          return NextResponse.json({
+            success: false,
+            connectionStatus: "FAILED",
+            error: "App ID and Secret Key cannot be empty.",
+          });
+        }
+
+        const res = await fetch(`${baseUrl}/orders/probe_connection_check`, {
+          headers: {
+            "x-client-id": appId,
+            "x-client-secret": secretKey,
+            "x-api-version": apiVersion,
+          },
+        });
+        const data = await res.json();
+
+        if (data.type === "authentication_error") {
+          return NextResponse.json({
+            success: false,
+            connectionStatus: "FAILED",
+            error: data.message || "Cashfree authentication failed. Please verify your App ID and Secret Key.",
+          });
+        }
+
+        return NextResponse.json({
+          success: true,
+          connectionStatus: "CONNECTED",
+          message: "Cashfree gateway connection verified successfully! Credentials are active and valid.",
+        });
+      } catch (connErr: any) {
+        return NextResponse.json({
+          success: false,
+          connectionStatus: "FAILED",
+          error: connErr.message || "Failed to connect to Cashfree with current credentials.",
+        });
+      }
+    }
+
     return NextResponse.json({
       success: true,
       settings: config,
@@ -60,19 +116,42 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { hubUrl, adminApiKey } = validation.data;
-    if (!hubUrl && !adminApiKey) {
+    const {
+      hubUrl,
+      adminApiKey,
+      cashfreeEnv,
+      cashfreeAppId,
+      cashfreeSecretKey,
+      cashfreeApiVersion,
+    } = validation.data;
+
+    const hasAnyField =
+      hubUrl ||
+      adminApiKey ||
+      cashfreeEnv ||
+      cashfreeAppId !== undefined ||
+      cashfreeSecretKey !== undefined ||
+      cashfreeApiVersion;
+
+    if (!hasAnyField) {
       return NextResponse.json(
         { success: false, error: "No settings provided to update" },
         { status: 400 }
       );
     }
 
-    const updated = await saveHubConfig({ hubUrl, adminApiKey });
+    const updated = await saveHubConfig({
+      hubUrl,
+      adminApiKey,
+      cashfreeEnv,
+      cashfreeAppId,
+      cashfreeSecretKey,
+      cashfreeApiVersion,
+    });
 
     return NextResponse.json({
       success: true,
-      message: "Settings saved to database successfully! Database triggers and runtime updated.",
+      message: "Settings saved to database successfully! Cashfree credentials and Hub URLs updated live.",
       settings: updated,
     });
   } catch (error: any) {

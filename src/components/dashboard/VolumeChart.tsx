@@ -45,6 +45,7 @@ export function VolumeChart({ data }: VolumeChartProps) {
             fontSize={11}
             tickLine={false}
             axisLine={false}
+            domain={[0, "auto"]}
             tickFormatter={(val) => `₹${val >= 1000 ? `${val / 1000}k` : val}`}
           />
           <Tooltip
