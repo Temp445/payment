@@ -12,11 +12,13 @@ import {
   Send,
   ShieldCheck,
   CreditCard,
+  BookOpen,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { label: "Overview", href: "/", icon: LayoutDashboard },
+  { label: "Integration Guides", href: "/guide", icon: BookOpen },
   { label: "Applications", href: "/apps", icon: Layers },
   { label: "Orders & Payments", href: "/orders", icon: ShoppingBag },
   { label: "Refunds", href: "/refunds", icon: RotateCcw },

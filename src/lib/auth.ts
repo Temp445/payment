@@ -90,6 +90,13 @@ export async function authenticateApplication(
 }
 
 /**
+ * Clear memory cache for tenant apps
+ */
+export function clearAppAuthCache() {
+  appAuthCache.clear();
+}
+
+/**
  * Verify Master Admin API Key
  */
 export function verifyAdminAuth(authHeader: string | null): boolean {
@@ -97,5 +104,8 @@ export function verifyAdminAuth(authHeader: string | null): boolean {
   const token = authHeader.replace(/^Bearer\s+/i, "").trim();
   const masterKey = process.env.ADMIN_API_KEY;
   if (!masterKey) return false;
-  return crypto.timingSafeEqual(Buffer.from(token), Buffer.from(masterKey));
+  const tokenBuf = Buffer.from(token);
+  const masterBuf = Buffer.from(masterKey);
+  if (tokenBuf.length !== masterBuf.length) return false;
+  return crypto.timingSafeEqual(tokenBuf, masterBuf);
 }
