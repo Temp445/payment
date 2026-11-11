@@ -55,6 +55,7 @@ model Application {
   orders           Order[]
   auditLogs        AuditLog[]
   outboxDeliveries WebhookOutboxQueue[]
+  productOffers    ProductOffer[]
 
   @@map("applications")
 }
@@ -186,6 +187,90 @@ model PaymentHubConfig {
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
 
   @@map("payment_hub_config")
+}
+
+model ProductOffer {
+  id              String               @id @default(uuid()) @db.Uuid
+  applicationId   String               @map("application_id")
+  application     Application          @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  productCode     String               @map("product_code")
+  productName     String               @map("product_name")
+  availableFrom   DateTime             @default(now()) @map("available_from") @db.Date
+  productIsActive Boolean              @default(true) @map("product_is_active")
+  createdAt       DateTime             @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime             @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  subscriptionOffers  SubscriptionOffer[]
+  userSubscriptions   UserSubscription[]
+  paymentTransactions PaymentTransaction[]
+
+  @@unique([applicationId, productCode])
+  @@map("products_offers")
+}
+
+model SubscriptionOffer {
+  id              BigInt               @id @default(autoincrement())
+  productId       String               @map("product_id") @db.Uuid
+  product         ProductOffer         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  tier            String
+  tierLevel       Int                  @default(1) @map("tier_level")
+  offerPrice      Float                @default(0) @map("offer_price")
+  offerCurrency   String               @default("INR") @map("offer_currency")
+  offerPeriod     Int                  @default(1) @map("offer_period")
+  offerPeriodType String               @default("month") @map("offer_period_type")
+  userLimit       Int                  @default(5) @map("user_limit")
+  tierLimits      Json?                @default("{\"features\": []}") @map("tier_limits")
+  offerIsActive   Boolean              @default(true) @map("offer_is_active")
+  createdAt       DateTime             @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime             @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  userSubscriptions   UserSubscription[]
+  paymentTransactions PaymentTransaction[]
+
+  @@map("subscription_offers")
+}
+
+model UserSubscription {
+  id              BigInt            @id @default(autoincrement())
+  productId       String            @map("product_id") @db.Uuid
+  product         ProductOffer      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  offerId         BigInt            @map("offer_id")
+  offer           SubscriptionOffer @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  offerStartsOn   DateTime          @default(now()) @map("offer_starts_on") @db.Date
+  offerEndsOn     DateTime          @map("offer_ends_on") @db.Date
+  offerIsActive   Boolean           @default(true) @map("offer_is_active")
+  organizationId  String            @map("organization_id")
+  userId          String            @map("user_id")
+  isTrialPeriod   Boolean           @default(false) @map("is_trial_period")
+  createdAt       DateTime          @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@unique([organizationId, productId])
+  @@map("user_subscriptions")
+}
+
+model PaymentTransaction {
+  id               String            @id @default(uuid()) @db.Uuid
+  gatewayPaymentId String?           @map("gateway_payment_id")
+  gatewayOrderId   String?           @map("gateway_order_id")
+  gatewaySignature String?           @map("gateway_signature")
+  gatewayName      String?           @default("CASHFREE") @map("gateway_name")
+  amount           Decimal           @db.Decimal
+  currency         String            @default("INR")
+  status           String            @default("PAID")
+  receiptNumber    String            @map("receipt_number")
+  productId        String            @map("product_id") @db.Uuid
+  product          ProductOffer      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  offerId          BigInt            @map("offer_id")
+  offer            SubscriptionOffer @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  offerPeriod      Int               @default(1) @map("offer_period")
+  offerPeriodType  String            @default("month") @map("offer_period_type")
+  organizationId   String            @map("organization_id")
+  userId           String?           @map("user_id")
+  createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("payment_transactions")
 }
 
 

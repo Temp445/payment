@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { Header } from "@/components/layout/Header";
 import {
   Code2,
@@ -20,6 +20,25 @@ import {
   Zap,
   Bot,
   Sparkles,
+  Search,
+  ExternalLink,
+  Database,
+  ChevronRight,
+  ChevronDown,
+  Globe,
+  Lock,
+  Cpu,
+  BookOpen,
+  Sliders,
+  Webhook,
+  Activity,
+  CheckSquare,
+  HelpCircle,
+  Key,
+  Shield,
+  Clock,
+  RefreshCw,
+  Send,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -30,7 +49,7 @@ interface CodeBlockProps {
   filePath?: string;
 }
 
-function CodeBlock({ title, code, filePath }: CodeBlockProps) {
+function CodeBlock({ title, code, filePath, language = "typescript" }: CodeBlockProps) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = () => {
@@ -40,1716 +59,1538 @@ function CodeBlock({ title, code, filePath }: CodeBlockProps) {
   };
 
   return (
-    <div className="rounded-xl border border-slate-700 bg-slate-900/90 overflow-hidden shadow-lg mb-6">
-      <div className="flex items-center justify-between px-4 py-2.5 bg-slate-800/80 border-b border-slate-700/80">
+    <div className="rounded-xl border border-slate-700/80 bg-slate-950/90 overflow-hidden shadow-xl mb-5">
+      <div className="flex items-center justify-between px-4 py-2.5 bg-slate-900/90 border-b border-slate-800">
         <div className="flex items-center gap-2">
           <FileCode className="w-4 h-4 text-blue-400" />
           <span className="text-xs font-semibold text-slate-200">{title}</span>
           {filePath && (
-            <span className="text-[11px] px-2 py-0.5 rounded bg-slate-700/60 text-slate-400 font-mono">
+            <span className="text-[11px] px-2 py-0.5 rounded bg-slate-800 text-slate-400 font-mono">
               {filePath}
             </span>
           )}
         </div>
         <button
           onClick={handleCopy}
-          className="flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-md bg-slate-700/80 hover:bg-slate-700 text-slate-200 transition font-medium"
+          className="flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-md bg-slate-800 hover:bg-slate-700 text-slate-200 transition font-medium border border-slate-700/60"
         >
           {copied ? (
             <>
               <Check className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="text-emerald-400">Copied!</span>
+              <span className="text-emerald-400 font-bold">Copied!</span>
             </>
           ) : (
             <>
-              <Copy className="w-3.5 h-3.5" />
+              <Copy className="w-3.5 h-3.5 text-slate-400" />
               <span>Copy</span>
             </>
           )}
         </button>
       </div>
-      <div className="p-4 overflow-x-auto font-mono text-xs text-slate-300 leading-relaxed">
+      <div className="p-4 overflow-x-auto font-mono text-xs text-slate-300 leading-relaxed bg-[#0b0f19]">
         <pre>{code}</pre>
       </div>
     </div>
   );
 }
 
-const NEXTJS_AI_AGENT_PROMPT = `You are an expert Next.js developer. Integrate Central Payment Hub checkout into this Next.js application by following these instructions step-by-step. Implement all files, install dependencies, and configure environment variables automatically without asking any clarifying questions:
+// ============================================================================
+// PROMPT & SNIPPET CONSTANTS
+// ============================================================================
 
-### Step 1: Install Cashfree SDK
-Run this command in the project terminal:
+const REACT_AI_AGENT_PROMPT = `You are an expert React / Vite frontend developer. Integrate Central Payment Hub checkout and licensing into this React application by following these instructions step-by-step:
+
+### Step 1: Install Cashfree Web SDK
+Run in terminal:
 npm install @cashfreepayments/cashfree-js
 
 ### Step 2: Configure Environment Variables
-Add the following configuration to the application's ".env.local" file:
-# Central Payment Hub Client Configuration
-# (Replace <YOUR_PUBLIC_CLIENT_ID> with your registered Client ID from Central Payment Hub /apps)
-NEXT_PUBLIC_PAYMENT_HUB_URL="http://localhost:3000/api/v1"
-NEXT_PUBLIC_PAYMENT_HUB_CLIENT_ID="<YOUR_PUBLIC_CLIENT_ID>"
-
-### Step 3: Create Next.js Hook (hooks/usePaymentHub.ts)
-Create the file "hooks/usePaymentHub.ts" (or "src/hooks/usePaymentHub.ts"):
-\`\`\`typescript
-"use client";
-
-import { useState } from "react";
-import { load } from "@cashfreepayments/cashfree-js";
-
-export interface InitiatePaymentParams {
-  orderId?: string;
-  amount: number;
-  customerPhone?: string;
-  customerName?: string;
-  customerEmail?: string;
-  orderNote?: string;
-  onSuccess?: (paymentId: string) => void;
-  onFailure?: (error: string) => void;
-}
-
-export function usePaymentHub() {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const pay = async ({
-    orderId = \`ORD_\${Date.now()}_\${Math.floor(Math.random() * 1000)}\`,
-    amount,
-    customerPhone = "9876543210",
-    customerName = "Valued Customer",
-    customerEmail = "customer@example.com",
-    orderNote = "Next.js Web Order",
-    onSuccess,
-    onFailure,
-  }: InitiatePaymentParams) => {
-    setLoading(true);
-    setError(null);
-
-    const hubUrl =
-      process.env.NEXT_PUBLIC_PAYMENT_HUB_URL || "http://localhost:3000/api/v1";
-    const clientId =
-      process.env.NEXT_PUBLIC_PAYMENT_HUB_CLIENT_ID || "";
-
-    try {
-      // 1. Direct browser call to Central Payment Hub (CORS is enabled)
-      const res = await fetch(\`\${hubUrl}/orders\`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-client-id": clientId,
-        },
-        body: JSON.stringify({
-          order_id: orderId,
-          order_amount: Number(amount),
-          order_currency: "INR",
-          customer_details: {
-            customer_id: \`CUST_\${customerPhone}\`,
-            customer_phone: customerPhone,
-            customer_name: customerName,
-            customer_email: customerEmail,
-          },
-          order_note: orderNote,
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || "Failed to create payment session");
-      }
-
-      const paymentSessionId = data.payment_session_id || data.order?.paymentSessionId;
-      if (!paymentSessionId) {
-        throw new Error("Missing paymentSessionId from payment hub response");
-      }
-
-      // 2. Load Cashfree Checkout Modal SDK
-      const cashfree = await load({
-        mode: process.env.NODE_ENV === "production" ? "production" : "sandbox",
-      });
-
-      // 3. Mount Drop-in Modal
-      const checkoutResult = await cashfree.checkout({
-        paymentSessionId: paymentSessionId,
-        redirectTarget: "_modal",
-      });
-
-      if (checkoutResult.error) {
-        // Automatically inform Payment Hub to mark order as cancelled
-        try {
-          await fetch(\`\${hubUrl}/orders/\${orderId}/cancel\`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "x-client-id": clientId },
-            body: JSON.stringify({ reason: checkoutResult.error.message || "Payment aborted by customer" }),
-          });
-        } catch {}
-        setError(checkoutResult.error.message || "Payment has been aborted. Please try again");
-        if (onFailure) onFailure(checkoutResult.error.message || "Payment aborted");
-        return;
-      }
-
-      // 4. Poll payment status to confirm
-      pollPaymentStatus(orderId, hubUrl, clientId, onSuccess, onFailure);
-    } catch (err: any) {
-      setError(err.message || "Payment failed to launch");
-      if (onFailure) onFailure(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const pollPaymentStatus = (
-    orderId: string,
-    hubUrl: string,
-    clientId: string,
-    onSuccess?: (id: string) => void,
-    onFailure?: (err: string) => void
-  ) => {
-    let attempts = 0;
-    const interval = setInterval(async () => {
-      attempts++;
-      try {
-        const res = await fetch(\`\${hubUrl}/orders/\${orderId}/status\`, {
-          headers: { "x-client-id": clientId },
-        });
-        const data = await res.json();
-
-        if (data.status === "PAID") {
-          clearInterval(interval);
-          if (onSuccess) onSuccess(data.latest_payment?.cfPaymentId || "CONFIRMED");
-        } else if (attempts >= 6) {
-          clearInterval(interval);
-          if (onSuccess) onSuccess("PENDING_VERIFICATION");
-        }
-      } catch (err: any) {
-        clearInterval(interval);
-        if (onFailure) onFailure("Status polling failed");
-      }
-    }, 1500);
-  };
-
-  return { pay, loading, error };
-}
-\`\`\`
-
-### Step 4: Create Next.js Component (components/CheckoutButton.tsx)
-Create the file "components/CheckoutButton.tsx" (or "src/components/CheckoutButton.tsx"):
-\`\`\`tsx
-"use client";
-
-import React, { useState } from "react";
-import { usePaymentHub } from "@/hooks/usePaymentHub";
-
-interface CheckoutButtonProps {
-  amount: number;
-  customerPhone?: string;
-  customerName?: string;
-  customerEmail?: string;
-  orderNote?: string;
-  onSuccess?: (paymentId: string) => void;
-  className?: string;
-}
-
-export function CheckoutButton({
-  amount,
-  customerPhone = "9876543210",
-  customerName = "Customer",
-  customerEmail = "customer@example.com",
-  orderNote = "Next.js Web Order Payment",
-  onSuccess,
-  className,
-}: CheckoutButtonProps) {
-  const { pay, loading, error } = usePaymentHub();
-  const [receipt, setReceipt] = useState<string | null>(null);
-
-  const handleCheckout = () => {
-    setReceipt(null);
-    pay({
-      amount,
-      customerPhone,
-      customerName,
-      customerEmail,
-      orderNote,
-      onSuccess: (paymentId) => {
-        setReceipt(\`🎉 Payment Confirmed! Ref ID: \${paymentId}\`);
-        if (onSuccess) onSuccess(paymentId);
-      },
-      onFailure: (err) => {
-        console.warn("Payment checkout notice:", err);
-      },
-    });
-  };
-
-  return (
-    <div className="space-y-2">
-      <button
-        onClick={handleCheckout}
-        disabled={loading}
-        className={
-          className ||
-          "w-full py-3 px-6 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold transition shadow-md cursor-pointer"
-        }
-      >
-        {loading ? "Opening Cashfree..." : \`Pay ₹\${amount} with Cashfree\`}
-      </button>
-
-      {receipt && (
-        <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-medium">
-          {receipt}
-        </div>
-      )}
-
-      {error && (
-        <div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs font-medium">
-          ❌ {error}
-        </div>
-      )}
-    </div>
-  );
-}
-\`\`\`
-
-### Step 5: Integration & Rules
-- Do NOT ask for clientSecret, database connection strings, or backend credentials (browser client uses only NEXT_PUBLIC_PAYMENT_HUB_CLIENT_ID).
-- Locate the main pricing, checkout, or cart page in this Next.js app and wire <CheckoutButton amount={...} /> into it.`;
-
-const REACT_AI_AGENT_PROMPT = `You are an expert React frontend developer. Integrate Central Payment Hub checkout into this React application by following these instructions step-by-step. Implement all files, install dependencies, and configure environment variables automatically without asking any clarifying questions:
-
-### Step 1: Install Cashfree SDK
-Run this command in the project terminal:
-npm install @cashfreepayments/cashfree-js
-
-### Step 2: Configure Environment Variables
-Add the following configuration to the application's ".env" file:
-# Central Payment Hub Client Configuration (Vite & CRA)
-# (Replace <YOUR_PUBLIC_CLIENT_ID> with your registered Client ID from Central Payment Hub /apps)
-VITE_PAYMENT_HUB_URL="http://localhost:3000/api/v1"
+Add to your ".env" file:
+VITE_PAYMENT_HUB_URL="http://localhost:3001/api/v1"
 VITE_PAYMENT_HUB_CLIENT_ID="<YOUR_PUBLIC_CLIENT_ID>"
 
-# For Create-React-App (CRA):
-REACT_APP_PAYMENT_HUB_URL="http://localhost:3000/api/v1"
-REACT_APP_PAYMENT_HUB_CLIENT_ID="<YOUR_PUBLIC_CLIENT_ID>"
+### Step 3: Create Hook (src/hooks/usePaymentHub.ts)
+Create "src/hooks/usePaymentHub.ts" with Cashfree dropin modal support, payment polling, and error handling.
 
-### Step 3: Create React Hook (src/hooks/usePaymentHub.ts)
-Create the file "src/hooks/usePaymentHub.ts":
-\`\`\`typescript
+### Step 4: Add <CheckoutButton />
+Create "src/components/CheckoutButton.tsx" to trigger payments effortlessly without backend servers.`;
+
+const NEXTJS_AI_AGENT_PROMPT = `You are an expert Next.js developer. Integrate Central Payment Hub checkout into this Next.js application by following these instructions step-by-step:
+
+### Step 1: Install Cashfree SDK
+npm install @cashfreepayments/cashfree-js
+
+### Step 2: Configure Environment Variables (.env.local)
+NEXT_PUBLIC_PAYMENT_HUB_URL="http://localhost:3001/api/v1"
+NEXT_PUBLIC_PAYMENT_HUB_CLIENT_ID="<YOUR_PUBLIC_CLIENT_ID>"
+
+### Step 3: Create Hook (hooks/usePaymentHub.ts)
+"use client";
 import { useState } from "react";
 import { load } from "@cashfreepayments/cashfree-js";
+// Handles payment initiation, Cashfree drop-in popup, and status polling.`;
 
-export interface InitiatePaymentParams {
-  orderId?: string;
-  amount: number;
-  customerPhone?: string;
-  customerName?: string;
-  customerEmail?: string;
-  orderNote?: string;
-  onSuccess?: (paymentId: string) => void;
-  onFailure?: (error: string) => void;
-}
-
-export function usePaymentHub() {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const pay = async ({
-    orderId = \`ORD_\${Date.now()}_\${Math.floor(Math.random() * 1000)}\`,
-    amount,
-    customerPhone = "9876543210",
-    customerName = "Valued Customer",
-    customerEmail = "customer@example.com",
-    orderNote = "React Store Checkout",
-    onSuccess,
-    onFailure,
-  }: InitiatePaymentParams) => {
-    setLoading(true);
-    setError(null);
-
-    // Read Vite or CRA environment variables
-    const hubUrl =
-      (typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_PAYMENT_HUB_URL) ||
-      (typeof process !== "undefined" && process.env?.REACT_APP_PAYMENT_HUB_URL) ||
-      "http://localhost:3000/api/v1";
-
-    const clientId =
-      (typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_PAYMENT_HUB_CLIENT_ID) ||
-      (typeof process !== "undefined" && process.env?.REACT_APP_PAYMENT_HUB_CLIENT_ID) ||
-      "";
-
-    try {
-      // 1. Direct browser call to Central Payment Hub (CORS is enabled)
-      const res = await fetch(\`\${hubUrl}/orders\`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-client-id": clientId,
-        },
-        body: JSON.stringify({
-          order_id: orderId,
-          order_amount: Number(amount),
-          order_currency: "INR",
-          customer_details: {
-            customer_id: \`CUST_\${customerPhone}\`,
-            customer_phone: customerPhone,
-            customer_name: customerName,
-            customer_email: customerEmail,
-          },
-          order_note: orderNote,
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || "Failed to create payment session");
-      }
-
-      const paymentSessionId = data.payment_session_id || data.order?.paymentSessionId;
-      if (!paymentSessionId) {
-        throw new Error("Missing paymentSessionId from payment hub response");
-      }
-
-      // 2. Load Cashfree Checkout Modal SDK
-      const isProd =
-        (typeof import.meta !== "undefined" && (import.meta as any).env?.PROD) ||
-        (typeof process !== "undefined" && process.env?.NODE_ENV === "production");
-
-      const cashfree = await load({
-        mode: isProd ? "production" : "sandbox",
-      });
-
-      // 3. Mount Drop-in Modal
-      const checkoutResult = await cashfree.checkout({
-        paymentSessionId: paymentSessionId,
-        redirectTarget: "_modal",
-      });
-
-      if (checkoutResult.error) {
-        // Automatically inform Payment Hub to mark order as cancelled
-        try {
-          await fetch(\`\${hubUrl}/orders/\${orderId}/cancel\`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "x-client-id": clientId },
-            body: JSON.stringify({ reason: checkoutResult.error.message || "Payment aborted by customer" }),
-          });
-        } catch {}
-        setError(checkoutResult.error.message || "Payment has been aborted. Please try again");
-        if (onFailure) onFailure(checkoutResult.error.message || "Payment aborted");
-        return;
-      }
-
-      // 4. Poll payment status to confirm
-      pollPaymentStatus(orderId, hubUrl, clientId, onSuccess, onFailure);
-    } catch (err: any) {
-      setError(err.message || "Payment failed to launch");
-      if (onFailure) onFailure(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const pollPaymentStatus = (
-    orderId: string,
-    hubUrl: string,
-    clientId: string,
-    onSuccess?: (id: string) => void,
-    onFailure?: (err: string) => void
-  ) => {
-    let attempts = 0;
-    const interval = setInterval(async () => {
-      attempts++;
-      try {
-        const res = await fetch(\`\${hubUrl}/orders/\${orderId}/status\`, {
-          headers: { "x-client-id": clientId },
-        });
-        const data = await res.json();
-
-        if (data.status === "PAID") {
-          clearInterval(interval);
-          if (onSuccess) onSuccess(data.latest_payment?.cfPaymentId || "CONFIRMED");
-        } else if (attempts >= 6) {
-          clearInterval(interval);
-          if (onSuccess) onSuccess("PENDING_VERIFICATION");
-        }
-      } catch (err: any) {
-        clearInterval(interval);
-        if (onFailure) onFailure("Status polling failed");
-      }
-    }, 1500);
-  };
-
-  return { pay, loading, error };
-}
-\`\`\`
-
-### Step 4: Create React Component (src/components/CheckoutButton.tsx)
-Create the file "src/components/CheckoutButton.tsx":
-\`\`\`tsx
-import React, { useState } from "react";
-import { usePaymentHub } from "../hooks/usePaymentHub";
-
-interface CheckoutButtonProps {
-  amount: number;
-  customerPhone?: string;
-  customerName?: string;
-  customerEmail?: string;
-  orderNote?: string;
-  onSuccess?: (paymentId: string) => void;
-  className?: string;
-}
-
-export function CheckoutButton({
-  amount,
-  customerPhone = "9876543210",
-  customerName = "Customer",
-  customerEmail = "customer@example.com",
-  orderNote = "React App Checkout",
-  onSuccess,
-  className,
-}: CheckoutButtonProps) {
-  const { pay, loading, error } = usePaymentHub();
-  const [receipt, setReceipt] = useState<string | null>(null);
-
-  const handleCheckout = () => {
-    setReceipt(null);
-    pay({
-      amount,
-      customerPhone,
-      customerName,
-      customerEmail,
-      orderNote,
-      onSuccess: (paymentId) => {
-        setReceipt(\`🎉 Payment Confirmed! Ref ID: \${paymentId}\`);
-        if (onSuccess) onSuccess(paymentId);
-      },
-      onFailure: (err) => {
-        console.warn("Payment checkout notice:", err);
-      },
-    });
-  };
-
-  return (
-    <div className="space-y-2">
-      <button
-        onClick={handleCheckout}
-        disabled={loading}
-        className={
-          className ||
-          "w-full py-3 px-6 rounded-xl bg-cyan-500 hover:bg-cyan-400 disabled:opacity-50 text-slate-950 font-bold transition shadow-md cursor-pointer"
-        }
-      >
-        {loading ? "Opening Cashfree..." : \`Pay ₹\${amount} with Cashfree\`}
-      </button>
-
-      {receipt && (
-        <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-medium">
-          {receipt}
-        </div>
-      )}
-
-      {error && (
-        <div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs font-medium">
-          ❌ {error}
-        </div>
-      )}
-    </div>
-  );
-}
-\`\`\`
-
-### Step 5: Integration & Rules
-- Do NOT ask for backend server routes, backend database credentials, or secret keys (zero-backend browser integration).
-- Wire <CheckoutButton amount={...} /> into the main checkout or pricing component.`;
-
-export default function GuidePage() {
-  const [framework, setFramework] = useState<"react" | "nextjs">("nextjs");
-  const [nextjsMode, setNextjsMode] = useState<"client" | "fullstack">("client");
-  const [activeTab, setActiveTab] = useState<string>("overview");
-  const [copiedSnippet, setCopiedSnippet] = useState<string | null>(null);
-
-  const activeAiPrompt = framework === "nextjs" ? NEXTJS_AI_AGENT_PROMPT : REACT_AI_AGENT_PROMPT;
-
-  const copyText = (text: string, id: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedSnippet(id);
-    setTimeout(() => setCopiedSnippet(null), 2000);
-  };
-
-  return (
-    <div className="flex-1 min-h-screen bg-[var(--background)] flex flex-col">
-      <Header title="Integration & Setup Guides" />
-
-      <main className="flex-1 p-6 max-w-6xl w-full mx-auto space-y-6">
-        {/* Framework Selector Bar */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-2xl bg-slate-800/60 border border-slate-700/80 shadow-md">
-          <div>
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-              Select Your Web Application Framework
-            </span>
-            <div className="flex items-center gap-2 mt-1.5">
-              <button
-                onClick={() => {
-                  setFramework("nextjs");
-                  setActiveTab("overview");
-                }}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition shadow-sm ${
-                  framework === "nextjs"
-                    ? "bg-blue-600 text-white ring-2 ring-blue-500/50"
-                    : "bg-slate-700/60 text-slate-300 hover:bg-slate-700"
-                }`}
-              >
-                <Code2 className="w-4 h-4" />
-                <span>Next.js</span>
-                <span className="text-[10px] px-1.5 py-0.2 rounded bg-blue-900/60 text-blue-200">
-                  App Router
-                </span>
-              </button>
-
-              <button
-                onClick={() => {
-                  setFramework("react");
-                  setActiveTab("overview");
-                }}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition shadow-sm ${
-                  framework === "react"
-                    ? "bg-cyan-500 text-slate-950 ring-2 ring-cyan-400/50"
-                    : "bg-slate-700/60 text-slate-300 hover:bg-slate-700"
-                }`}
-              >
-                <Atom className="w-4 h-4" />
-                <span>Pure React</span>
-                <span className="text-[10px] px-1.5 py-0.2 rounded bg-cyan-900/40 text-cyan-200">
-                  Vite / CRA
-                </span>
-              </button>
-            </div>
-          </div>
-
-          <Link
-            href="/apps"
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 text-white font-semibold text-xs transition border border-slate-600"
-          >
-            <Layers className="w-4 h-4 text-blue-400" />
-            <span>Manage App API Keys</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </Link>
-        </div>
-
-        {/* HERO SECTION */}
-        {framework === "nextjs" ? (
-          <div className="relative rounded-2xl bg-gradient-to-r from-blue-900/40 via-indigo-900/30 to-purple-900/20 border border-blue-500/20 p-6 shadow-xl space-y-4">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div>
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20 mb-2">
-                  <Code2 className="w-3.5 h-3.5" /> Next.js 13 / 14 / 15 Integration
-                </div>
-                <h2 className="text-2xl font-extrabold text-white tracking-tight">
-                  Integrate Next.js with Central Payment Hub
-                </h2>
-                <p className="text-sm text-slate-300 mt-1 max-w-2xl">
-                  Choose your preferred architecture below: Connect using <strong>only 2 public environment variables</strong> (Client-Only like React), or use <strong>Full-Stack with Server Routes & Webhooks</strong>.
-                </p>
-              </div>
-
-              {/* Mode Switcher */}
-              <div className="bg-slate-900/90 p-1.5 rounded-xl border border-slate-700 flex items-center gap-1 shrink-0">
-                <button
-                  onClick={() => {
-                    setNextjsMode("client");
-                    setActiveTab("overview");
-                  }}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
-                    nextjsMode === "client"
-                      ? "bg-blue-600 text-white shadow-sm"
-                      : "text-slate-400 hover:text-slate-200"
-                  }`}
-                >
-                  ⚡ Client-Only (2 Variables)
-                </button>
-                <button
-                  onClick={() => {
-                    setNextjsMode("fullstack");
-                    setActiveTab("overview");
-                  }}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
-                    nextjsMode === "fullstack"
-                      ? "bg-indigo-600 text-white shadow-sm"
-                      : "text-slate-400 hover:text-slate-200"
-                  }`}
-                >
-                  🛡️ Full-Stack (Server & Webhooks)
-                </button>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="relative rounded-2xl bg-gradient-to-r from-cyan-950/60 via-slate-900/80 to-blue-950/40 border border-cyan-500/30 p-6 shadow-xl">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 mb-3">
-              <Atom className="w-3.5 h-3.5" /> Pure React Frontend • Vite / CRA / SPA
-            </div>
-            <h2 className="text-2xl font-extrabold text-white tracking-tight">
-              Connect Pure React Frontend (Zero Backend Required)
-            </h2>
-            <p className="text-sm text-slate-300 mt-1 max-w-3xl">
-              This Central Payment Hub features <strong>built-in CORS</strong> and a <strong>public Client ID</strong> mode. Your React single-page application (SPA) creates orders, launches the Cashfree drop-in modal, and verifies payment status directly from the browser without needing a backend server or database!
-            </p>
-          </div>
-        )}
-
-        {/* AI AGENT ONE-SHOT BANNER */}
-        <div className="relative rounded-2xl bg-gradient-to-r from-purple-950/70 via-slate-900 to-indigo-950/60 border border-purple-500/30 p-5 shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-start gap-3.5">
-            <div className="p-2.5 rounded-xl bg-purple-500/20 text-purple-400 border border-purple-500/30 shrink-0">
-              <Bot className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-base font-bold text-white flex items-center gap-1.5">
-                  {framework === "nextjs" ? "Next.js AI Auto-Integration Prompt" : "React AI Auto-Integration Prompt"}
-                </h3>
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30">
-                  <Sparkles className="w-2.5 h-2.5 text-purple-300" /> Cursor / Antigravity / Copilot
-                </span>
-              </div>
-              <p className="text-xs text-slate-300 mt-1 max-w-2xl leading-relaxed">
-                Copy this complete prompt into your AI coding assistant (Cursor, Antigravity, Claude Code, Copilot). It automatically creates the hook, checkout button, installs dependencies, and configures {framework === "nextjs" ? ".env.local (Next.js)" : ".env (React/Vite)"} in one shot without asking questions.
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              onClick={() => copyText(activeAiPrompt, "ai-banner-prompt")}
-              className="px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold flex items-center gap-2 transition shadow-md shadow-purple-900/30"
-            >
-              {copiedSnippet === "ai-banner-prompt" ? (
-                <>
-                  <Check className="w-4 h-4 text-emerald-300" />
-                  <span>Prompt Copied!</span>
-                </>
-              ) : (
-                <>
-                  <Copy className="w-4 h-4" />
-                  <span>Copy {framework === "nextjs" ? "Next.js" : "React"} Prompt</span>
-                </>
-              )}
-            </button>
-            <button
-              onClick={() => setActiveTab("ai-prompt")}
-              className={`px-3.5 py-2.5 rounded-xl text-xs font-semibold border transition ${
-                activeTab === "ai-prompt"
-                  ? "bg-slate-800 border-purple-500/50 text-purple-300"
-                  : "bg-slate-900/80 border-slate-700 text-slate-300 hover:bg-slate-800"
-              }`}
-            >
-              View Instructions
-            </button>
-          </div>
-        </div>
-
-        {/* TABS SELECTOR */}
-        <div className="flex flex-wrap items-center gap-2 border-b border-slate-800 pb-3">
-          {framework === "nextjs" && nextjsMode === "client" && (
-            <>
-              {[
-                { id: "overview", label: "Overview & Flow" },
-                { id: "ai-prompt", label: "🤖 AI One-Shot Prompt" },
-                { id: "env", label: "1. Next.js .env.local (2 Variables)" },
-                { id: "hook", label: "2. React Payment Hook" },
-                { id: "component", label: "3. Client Checkout Component" },
-                { id: "testing", label: "4. Sandbox Simulator & Testing" },
-              ].map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`px-4 py-2 rounded-lg text-xs font-semibold transition flex items-center gap-2 ${
-                    activeTab === tab.id
-                      ? "bg-blue-600 text-white shadow-sm"
-                      : "bg-slate-800/60 text-slate-400 hover:text-slate-200 hover:bg-slate-800"
-                  }`}
-                >
-                  <span>{tab.label}</span>
-                </button>
-              ))}
-            </>
-          )}
-
-          {framework === "nextjs" && nextjsMode === "fullstack" && (
-            <>
-              {[
-                { id: "overview", label: "Overview & Flow" },
-                { id: "ai-prompt", label: "🤖 AI One-Shot Prompt" },
-                { id: "env", label: "1. Next.js Environment (5 Variables)" },
-                { id: "backend", label: "2. Server Order API" },
-                { id: "frontend", label: "3. Checkout Modal" },
-                { id: "webhook", label: "4. Webhook Listener" },
-                { id: "testing", label: "5. Sandbox Simulator & Testing" },
-              ].map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`px-4 py-2 rounded-lg text-xs font-semibold transition flex items-center gap-2 ${
-                    activeTab === tab.id
-                      ? "bg-indigo-600 text-white shadow-sm"
-                      : "bg-slate-800/60 text-slate-400 hover:text-slate-200 hover:bg-slate-800"
-                  }`}
-                >
-                  <span>{tab.label}</span>
-                </button>
-              ))}
-            </>
-          )}
-
-          {framework === "react" && (
-            <>
-              {[
-                { id: "overview", label: "Overview & Architecture" },
-                { id: "ai-prompt", label: "🤖 AI One-Shot Prompt" },
-                { id: "env", label: "1. React Environment (.env)" },
-                { id: "hook", label: "2. React Payment Hook" },
-                { id: "component", label: "3. React Checkout Component" },
-                { id: "testing", label: "4. Sandbox Simulator & Testing" },
-              ].map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`px-4 py-2 rounded-lg text-xs font-semibold transition flex items-center gap-2 ${
-                    activeTab === tab.id
-                      ? "bg-cyan-500 text-slate-950 font-bold shadow-sm"
-                      : "bg-slate-800/60 text-slate-400 hover:text-slate-200 hover:bg-slate-800"
-                  }`}
-                >
-                  <span>{tab.label}</span>
-                </button>
-              ))}
-            </>
-          )}
-        </div>
-
-        {/* ========================================================================= */}
-        {/* NEXT.JS (CLIENT-ONLY MODE - 2 VARIABLES) */}
-        {/* ========================================================================= */}
-        {framework === "nextjs" && nextjsMode === "client" && (
-          <div className="space-y-6">
-            {activeTab === "overview" && (
-              <div className="space-y-6">
-                <div className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/20 text-slate-200 text-xs">
-                  <span className="font-bold text-blue-400">Yes! You can connect Next.js using only 2 variables:</span> Because this Central Payment Hub has <strong>built-in CORS</strong> and a public Client ID mode, your Next.js Client Components (<code>&quot;use client&quot;</code>) can call the Payment Hub directly from the user&apos;s browser without needing any Next.js backend API routes, server secrets, or webhooks.
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="p-5 rounded-xl border border-slate-800 bg-slate-800/40 space-y-2">
-                    <div className="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center font-bold text-sm">
-                      1
-                    </div>
-                    <h4 className="font-semibold text-slate-100 text-sm">Direct Browser Call</h4>
-                    <p className="text-xs text-slate-400 leading-relaxed">
-                      Your Next.js client component calls <code className="text-blue-400">POST /api/v1/orders</code> with just <code className="text-blue-400">NEXT_PUBLIC_PAYMENT_HUB_CLIENT_ID</code>.
-                    </p>
-                  </div>
-
-                  <div className="p-5 rounded-xl border border-slate-800 bg-slate-800/40 space-y-2">
-                    <div className="w-8 h-8 rounded-lg bg-indigo-500/10 text-indigo-400 flex items-center justify-center font-bold text-sm">
-                      2
-                    </div>
-                    <h4 className="font-semibold text-slate-100 text-sm">Cashfree Drop-in Modal</h4>
-                    <p className="text-xs text-slate-400 leading-relaxed">
-                      The Cashfree JS SDK mounts a checkout modal directly on top of your Next.js page.
-                    </p>
-                  </div>
-
-                  <div className="p-5 rounded-xl border border-slate-800 bg-slate-800/40 space-y-2">
-                    <div className="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center font-bold text-sm">
-                      3
-                    </div>
-                    <h4 className="font-semibold text-slate-100 text-sm">Instant Polling</h4>
-                    <p className="text-xs text-slate-400 leading-relaxed">
-                      Your client component polls <code className="text-emerald-400">GET /api/v1/orders/:id/status</code> to confirm payment and display a receipt.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="p-5 rounded-xl border border-slate-800 bg-slate-900/60 space-y-3">
-                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                    <Terminal className="w-4 h-4 text-blue-400" />
-                    Install Cashfree JS SDK
-                  </h3>
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-slate-950 font-mono text-xs text-emerald-400 border border-slate-800">
-                    <code>npm install @cashfreepayments/cashfree-js</code>
-                    <button
-                      onClick={() => copyText("npm install @cashfreepayments/cashfree-js", "next-pkg-client")}
-                      className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-sans flex items-center gap-1 transition"
-                    >
-                      {copiedSnippet === "next-pkg-client" ? (
-                        <Check className="w-3 h-3 text-emerald-400" />
-                      ) : (
-                        <Copy className="w-3 h-3" />
-                      )}
-                      <span>{copiedSnippet === "next-pkg-client" ? "Copied" : "Copy"}</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {activeTab === "env" && (
-              <div className="space-y-4">
-                <div className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-200 text-xs">
-                  <strong>Notice the NEXT_PUBLIC_ prefix:</strong> In Next.js, variables used directly inside client-side components (like buttons or hooks) must start with <code>NEXT_PUBLIC_</code>.
-                </div>
-
-                <CodeBlock
-                  title="Next.js Client-Only Environment (Only 2 Variables)"
-                  filePath=".env.local"
-                  code={`# -------------------------------------------------------------
-# Next.js Client-Only Mode (Zero-Backend, No Webhooks, No Secrets)
-# -------------------------------------------------------------
-
-# Base URL of Central Payment Hub
-NEXT_PUBLIC_PAYMENT_HUB_URL="http://localhost:3000/api/v1"
-
-# Public Client ID from Payment Hub > Applications (/apps)
-NEXT_PUBLIC_PAYMENT_HUB_CLIENT_ID="pub_live_your_app_id"`}
-                />
-              </div>
-            )}
-
-            {activeTab === "hook" && (
-              <div className="space-y-4">
-                <p className="text-xs text-slate-400">
-                  Save this hook in your Next.js project. It calls the Central Payment Hub directly from the browser:
-                </p>
-
-                <CodeBlock
-                  title="Next.js Client Payment Hook"
-                  filePath="hooks/usePaymentHub.ts"
-                  code={`"use client";
-
-import { useState } from "react";
+const CLIENT_SDK_CODE = `/**
+ * Universal Payment Hub Client SDK (paymentHubClient.ts)
+ * Plug-and-play for Pure React, Next.js, Vue, or Vanilla JS.
+ */
 import { load } from "@cashfreepayments/cashfree-js";
 
-export interface InitiatePaymentParams {
-  orderId?: string;
-  amount: number;
-  customerPhone: string;
-  customerName?: string;
-  customerEmail?: string;
-  orderNote?: string;
-  onSuccess?: (paymentId: string) => void;
-  onFailure?: (error: string) => void;
+export interface HubConfig {
+  hubUrl: string;       // e.g. "http://localhost:3001/api/v1"
+  clientId: string;     // e.g. "pub_live_payroll_..."
 }
 
-export function usePaymentHub() {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+export class PaymentHubClient {
+  private hubUrl: string;
+  private clientId: string;
 
-  const pay = async ({
-    orderId = \`ORD_\${Date.now()}_\${Math.floor(Math.random() * 1000)}\`,
-    amount,
-    customerPhone,
-    customerName = "Valued Customer",
-    customerEmail = "customer@example.com",
-    orderNote = "Next.js Web Store Order",
-    onSuccess,
-    onFailure,
-  }: InitiatePaymentParams) => {
-    setLoading(true);
-    setError(null);
+  constructor(config: HubConfig) {
+    this.hubUrl = config.hubUrl.replace(/\\/$/, "");
+    this.clientId = config.clientId;
+  }
 
-    const hubUrl = process.env.NEXT_PUBLIC_PAYMENT_HUB_URL || "http://localhost:3000/api/v1";
-    const clientId = process.env.NEXT_PUBLIC_PAYMENT_HUB_CLIENT_ID || "";
+  // 1. Check Active License & Feature Entitlements
+  async checkSubscription(orgId: string, feature?: string) {
+    const url = new URL(\`\${this.hubUrl}/subscriptions/check\`);
+    url.searchParams.set("orgId", orgId);
+    if (feature) url.searchParams.set("feature", feature);
 
-    try {
-      // 1. Direct browser call to Central Payment Hub (CORS is enabled)
-      const res = await fetch(\`\${hubUrl}/orders\`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-client-id": clientId,
-        },
-        body: JSON.stringify({
-          order_id: orderId,
-          order_amount: Number(amount),
-          order_currency: "INR",
-          customer_details: {
-            customer_id: \`CUST_\${customerPhone}\`,
-            customer_phone: customerPhone,
-            customer_name: customerName,
-            customer_email: customerEmail,
-          },
-          order_note: orderNote,
-        }),
-      });
-
-      const data = await res.json();
-      if (!data.success || !data.payment_session_id) {
-        throw new Error(data.error || "Failed to create payment session");
-      }
-
-      // 2. Load Cashfree Checkout SDK
-      const cashfree = await load({
-        mode: process.env.NODE_ENV === "production" ? "production" : "sandbox",
-      });
-
-      // 3. Mount Drop-in Modal
-      const result = await cashfree.checkout({
-        paymentSessionId: data.payment_session_id,
-        redirectTarget: "_modal",
-      });
-
-      if (result.error) {
-        const errMsg = result.error.message || "Payment cancelled";
-        setError(errMsg);
-        onFailure?.(errMsg);
-        return;
-      }
-
-      // 4. Poll status for immediate UI receipt
-      pollStatus(orderId, hubUrl, clientId, onSuccess, onFailure);
-    } catch (err: any) {
-      const errMsg = err.message || "Network error launching payment";
-      setError(errMsg);
-      onFailure?.(errMsg);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const pollStatus = (
-    orderId: string,
-    hubUrl: string,
-    clientId: string,
-    onSuccess?: (paymentId: string) => void,
-    onFailure?: (err: string) => void
-  ) => {
-    let attempts = 0;
-    const interval = setInterval(async () => {
-      attempts++;
-      try {
-        const res = await fetch(\`\${hubUrl}/orders/\${orderId}/status\`, {
-          headers: { "x-client-id": clientId },
-        });
-        const statusData = await res.json();
-
-        if (statusData.status === "PAID") {
-          clearInterval(interval);
-          onSuccess?.(statusData.latest_payment?.cfPaymentId || "CONFIRMED");
-        } else if (attempts >= 6) {
-          clearInterval(interval);
-          onSuccess?.("PENDING_VERIFICATION");
-        }
-      } catch {
-        clearInterval(interval);
-        onFailure?.("Failed to check status");
-      }
-    }, 1500);
-  };
-
-  return { pay, loading, error };
-}`}
-                />
-              </div>
-            )}
-
-            {activeTab === "component" && (
-              <div className="space-y-4">
-                <CodeBlock
-                  title="Next.js Client Component"
-                  filePath="components/CheckoutButton.tsx"
-                  code={`"use client";
-
-import React, { useState } from "react";
-import { usePaymentHub } from "@/hooks/usePaymentHub";
-
-export function CheckoutButton({ amount }: { amount: number }) {
-  const { pay, loading, error } = usePaymentHub();
-  const [receipt, setReceipt] = useState<string | null>(null);
-
-  const handleCheckout = () => {
-    setReceipt(null);
-    pay({
-      amount,
-      customerPhone: "9876543210",
-      customerName: "Priya Patel",
-      customerEmail: "priya@example.com",
-      orderNote: "Client-only Next.js Order",
-      onSuccess: (paymentId) => {
-        setReceipt(\`🎉 Payment Confirmed! Ref ID: \${paymentId}\`);
-      },
-      onFailure: (err) => {
-        console.warn("Payment checkout notice:", err);
-      },
+    const res = await fetch(url.toString(), {
+      headers: { "x-client-id": this.clientId }
     });
-  };
+    return res.json();
+  }
 
-  return (
-    <div className="space-y-3">
-      <button
-        onClick={handleCheckout}
-        disabled={loading}
-        className="w-full py-3 px-6 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold transition shadow-md"
-      >
-        {loading ? "Opening Cashfree..." : \`Pay ₹\${amount} with Cashfree\`}
-      </button>
+  // 2. Fetch Configured Subscription Plans & Tiers
+  async getPlans() {
+    const res = await fetch(\`\${this.hubUrl}/subscriptions/offers\`, {
+      headers: { "x-client-id": this.clientId }
+    });
+    return res.json();
+  }
 
-      {receipt && (
-        <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs">
-          {receipt}
-        </div>
-      )}
-
-      {error && (
-        <div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs">
-          ❌ {error}
-        </div>
-      )}
-    </div>
-  );
-}`}
-                />
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ========================================================================= */}
-        {/* NEXT.JS (FULL-STACK MODE - 5 VARIABLES) */}
-        {/* ========================================================================= */}
-        {framework === "nextjs" && nextjsMode === "fullstack" && (
-          <div className="space-y-6">
-            {activeTab === "overview" && (
-              <div className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="p-5 rounded-xl border border-slate-800 bg-slate-800/40 space-y-2">
-                    <div className="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center font-bold text-sm">
-                      1
-                    </div>
-                    <h4 className="font-semibold text-slate-100 text-sm">Create Order</h4>
-                    <p className="text-xs text-slate-400 leading-relaxed">
-                      Your Next.js Route Handler calls <code className="text-blue-400">POST /api/v1/orders</code> with your Client ID & Secret to receive a <code className="text-blue-400">payment_session_id</code>.
-                    </p>
-                  </div>
-
-                  <div className="p-5 rounded-xl border border-slate-800 bg-slate-800/40 space-y-2">
-                    <div className="w-8 h-8 rounded-lg bg-indigo-500/10 text-indigo-400 flex items-center justify-center font-bold text-sm">
-                      2
-                    </div>
-                    <h4 className="font-semibold text-slate-100 text-sm">Mount Modal</h4>
-                    <p className="text-xs text-slate-400 leading-relaxed">
-                      Your React client component mounts the official <code className="text-indigo-400">@cashfreepayments/cashfree-js</code> drop-in modal.
-                    </p>
-                  </div>
-
-                  <div className="p-5 rounded-xl border border-slate-800 bg-slate-800/40 space-y-2">
-                    <div className="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center font-bold text-sm">
-                      3
-                    </div>
-                    <h4 className="font-semibold text-slate-100 text-sm">Verified Webhook</h4>
-                    <p className="text-xs text-slate-400 leading-relaxed">
-                      The Payment Hub locks the terminal <code className="text-emerald-400">PAID</code> state and delivers an HMAC-SHA256 signed event to your Next.js webhook.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {activeTab === "env" && (
-              <div className="space-y-4">
-                <CodeBlock
-                  title="Next.js Full-Stack Environment (5 Variables)"
-                  filePath=".env.local"
-                  code={`# -------------------------------------------------------------
-# Next.js Full-Stack Mode (Server Routes + Signed Webhooks)
-# -------------------------------------------------------------
-
-PAYMENT_HUB_URL="http://localhost:3000/api/v1"
-PAYMENT_HUB_CLIENT_ID="pub_live_your_app_id"
-PAYMENT_HUB_CLIENT_SECRET="sec_live_your_app_secret"
-PAYMENT_HUB_WEBHOOK_SECRET="whsec_your_webhook_secret"
-NEXT_PUBLIC_APP_URL="http://localhost:3001"`}
-                />
-              </div>
-            )}
-
-            {activeTab === "backend" && (
-              <div className="space-y-4">
-                <CodeBlock
-                  title="Next.js App Router Order Route Handler"
-                  filePath="app/api/checkout/route.ts"
-                  code={`import { NextRequest, NextResponse } from "next/server";
-
-export async function POST(req: NextRequest) {
-  try {
-    const { amount, customerName, customerPhone, customerEmail, orderNote } = await req.json();
-
-    const hubUrl = process.env.PAYMENT_HUB_URL || "http://localhost:3000/api/v1";
-    const clientId = process.env.PAYMENT_HUB_CLIENT_ID!;
-    const clientSecret = process.env.PAYMENT_HUB_CLIENT_SECRET!;
-
-    const internalOrderId = \`ORD_\${Date.now()}_\${Math.floor(Math.random() * 1000)}\`;
-
-    const hubRes = await fetch(\`\${hubUrl}/orders\`, {
+  // 3. Initiate Cashfree Drop-in Checkout
+  async checkout(params: {
+    amount: number;
+    customerPhone: string;
+    customerEmail?: string;
+    customerName?: string;
+    orderNote?: string;
+    metadata?: Record<string, any>;
+    onSuccess?: (paymentId: string) => void;
+    onFailure?: (error: string) => void;
+  }) {
+    // A. Create Order
+    const orderRes = await fetch(\`\${this.hubUrl}/orders\`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-client-id": clientId,
-        "x-client-secret": clientSecret,
+        "x-client-id": this.clientId
       },
       body: JSON.stringify({
-        order_id: internalOrderId,
-        order_amount: Number(amount),
-        order_currency: "INR",
-        customer_details: {
-          customer_id: \`CUST_\${customerPhone}\`,
-          customer_phone: customerPhone,
-          customer_name: customerName || "Guest Customer",
-          customer_email: customerEmail || "customer@example.com",
-        },
-        order_note: orderNote || "Next.js Web Store Purchase",
-        order_meta: {
-          return_url: \`\${process.env.NEXT_PUBLIC_APP_URL}/checkout/success?order_id=\${internalOrderId}\`,
-        },
-      }),
+        amount: params.amount,
+        customerPhone: params.customerPhone,
+        customerEmail: params.customerEmail,
+        customerName: params.customerName,
+        orderNote: params.orderNote,
+        metadata: params.metadata || {}
+      })
     });
-
-    const data = await hubRes.json();
-
-    if (!data.success || !data.payment_session_id) {
-      return NextResponse.json(
-        { success: false, error: data.error || "Failed to create payment session" },
-        { status: 400 }
-      );
+    const orderData = await orderRes.json();
+    if (!orderRes.ok || !orderData.payment_session_id) {
+      throw new Error(orderData.error || "Order creation failed");
     }
 
-    return NextResponse.json({
-      success: true,
-      payment_session_id: data.payment_session_id,
-      order_id: internalOrderId,
+    // B. Launch Cashfree Drop-in
+    const cashfree = await load({ mode: "sandbox" });
+    const result = await cashfree.checkout({
+      paymentSessionId: orderData.payment_session_id,
+      redirectTarget: "_modal"
     });
-  } catch (error: any) {
-    return NextResponse.json(
-      { success: false, error: error.message || "Internal server error" },
-      { status: 500 }
-    );
+
+    if (result.error) {
+      if (params.onFailure) params.onFailure(result.error.message || "Payment aborted");
+      return;
+    }
+
+    if (params.onSuccess) params.onSuccess(orderData.order_id);
   }
-}`}
-                />
-              </div>
-            )}
+}`;
 
-            {activeTab === "frontend" && (
-              <div className="space-y-4">
-                <CodeBlock
-                  title="Next.js Client Checkout Button"
-                  filePath="components/CheckoutButton.tsx"
-                  code={`"use client";
+const PG_SYNC_DDL = `-- ============================================================================
+-- Standard Tenant App Database Schema (PostgreSQL / Supabase)
+-- Run this script in your application's database (e.g. Ace Payroll, CRM, ERP).
+-- ============================================================================
 
-import React, { useState } from "react";
-import { load } from "@cashfreepayments/cashfree-js";
+-- 1. App Subscriptions Table (Stores active entitlement licenses)
+CREATE TABLE IF NOT EXISTS public.app_subscriptions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id TEXT NOT NULL,
+    user_id TEXT,
+    tier TEXT NOT NULL DEFAULT 'FREE',
+    tier_level INTEGER NOT NULL DEFAULT 0,
+    offer_starts_on TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    offer_ends_on TIMESTAMPTZ NOT NULL,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    user_limit INTEGER NOT NULL DEFAULT 5,
+    features JSONB NOT NULL DEFAULT '[]'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 
-export function CheckoutButton({ amount, customerPhone }: { amount: number; customerPhone: string }) {
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<string | null>(null);
+CREATE INDEX IF NOT EXISTS idx_app_subs_org ON public.app_subscriptions(organization_id);
+CREATE INDEX IF NOT EXISTS idx_app_subs_active ON public.app_subscriptions(is_active, offer_ends_on);
 
-  const handleCheckout = async () => {
-    setLoading(true);
-    setResult(null);
+-- 2. App Payment Transactions Ledger (Audit of all paid orders)
+CREATE TABLE IF NOT EXISTS public.app_payment_transactions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    order_id TEXT UNIQUE NOT NULL,
+    cf_payment_id TEXT,
+    organization_id TEXT NOT NULL,
+    user_id TEXT,
+    amount NUMERIC(12, 2) NOT NULL,
+    currency VARCHAR(10) NOT NULL DEFAULT 'INR',
+    tier TEXT NOT NULL,
+    billing_period INTEGER NOT NULL DEFAULT 1,
+    period_type VARCHAR(20) NOT NULL DEFAULT 'month',
+    features JSONB NOT NULL DEFAULT '[]'::jsonb,
+    status VARCHAR(50) NOT NULL DEFAULT 'PAID',
+    raw_payload JSONB,
+    paid_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 
-    try {
-      const response = await fetch("/api/checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ amount, customerPhone }),
-      });
+CREATE INDEX IF NOT EXISTS idx_app_tx_order ON public.app_payment_transactions(order_id);
+CREATE INDEX IF NOT EXISTS idx_app_tx_org ON public.app_payment_transactions(organization_id);
 
-      const orderData = await response.json();
-      if (!orderData.success || !orderData.payment_session_id) {
-        throw new Error(orderData.error || "Could not initialize order");
-      }
+-- 3. Automated License Provisioning Trigger
+CREATE OR REPLACE FUNCTION public.handle_tenant_subscription_activation()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_ends_on TIMESTAMPTZ;
+BEGIN
+    IF NEW.period_type = 'year' THEN
+        v_ends_on := NEW.paid_at + (NEW.billing_period || ' years')::INTERVAL;
+    ELSE
+        v_ends_on := NEW.paid_at + (NEW.billing_period || ' months')::INTERVAL;
+    END IF;
 
-      const cashfree = await load({
-        mode: process.env.NODE_ENV === "production" ? "production" : "sandbox",
-      });
+    -- Upsert active subscription license for the organization
+    INSERT INTO public.app_subscriptions (
+        organization_id, user_id, tier, tier_level,
+        offer_starts_on, offer_ends_on, is_active, features, updated_at
+    )
+    VALUES (
+        NEW.organization_id, NEW.user_id, NEW.tier, 1,
+        NEW.paid_at, v_ends_on, TRUE, NEW.features, NOW()
+    )
+    ON CONFLICT (organization_id) DO UPDATE SET
+        tier = EXCLUDED.tier,
+        offer_starts_on = EXCLUDED.offer_starts_on,
+        offer_ends_on = EXCLUDED.offer_ends_on,
+        is_active = TRUE,
+        features = EXCLUDED.features,
+        updated_at = NOW();
 
-      const checkoutResult = await cashfree.checkout({
-        paymentSessionId: orderData.payment_session_id,
-        redirectTarget: "_modal",
-      });
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
 
-      if (checkoutResult.error) {
-        setResult(\`❌ Payment cancelled: \${checkoutResult.error.message}\`);
-        return;
-      }
+DROP TRIGGER IF EXISTS trg_activate_tenant_license ON public.app_payment_transactions;
+CREATE TRIGGER trg_activate_tenant_license
+AFTER INSERT ON public.app_payment_transactions
+FOR EACH ROW EXECUTE FUNCTION public.handle_tenant_subscription_activation();`;
 
-      setResult("🎉 Payment Completed! Verifying status...");
-    } catch (err: any) {
-      setResult(\`❌ Error: \${err.message}\`);
-    } finally {
-      setLoading(false);
-    }
-  };
+const MYSQL_SYNC_DDL = `-- ============================================================================
+-- Standard Tenant App Database Schema (MySQL 8.0+)
+-- Run this in your MySQL database (e.g. for PHP, Laravel, or Node/Express apps).
+-- ============================================================================
 
-  return (
-    <button
-      onClick={handleCheckout}
-      disabled={loading}
-      className="py-2.5 px-6 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold"
-    >
-      {loading ? "Launching..." : \`Pay ₹\${amount}\`}
-    </button>
-  );
-}`}
-                />
-              </div>
-            )}
+CREATE TABLE IF NOT EXISTS app_subscriptions (
+    id VARCHAR(36) PRIMARY KEY,
+    organization_id VARCHAR(100) NOT NULL,
+    user_id VARCHAR(100) NULL,
+    tier VARCHAR(50) NOT NULL DEFAULT 'FREE',
+    tier_level INT NOT NULL DEFAULT 0,
+    offer_starts_on DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    offer_ends_on DATETIME NOT NULL,
+    is_active TINYINT(1) NOT NULL DEFAULT 1,
+    user_limit INT NOT NULL DEFAULT 5,
+    features JSON NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_org (organization_id),
+    KEY idx_active_ends (is_active, offer_ends_on)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-            {activeTab === "webhook" && (
-              <div className="space-y-4">
-                <CodeBlock
-                  title="Next.js Webhook Route Handler"
-                  filePath="app/api/webhooks/payment/route.ts"
-                  code={`import { NextRequest, NextResponse } from "next/server";
+CREATE TABLE IF NOT EXISTS app_payment_transactions (
+    id VARCHAR(36) PRIMARY KEY,
+    order_id VARCHAR(100) UNIQUE NOT NULL,
+    cf_payment_id VARCHAR(100) NULL,
+    organization_id VARCHAR(100) NOT NULL,
+    user_id VARCHAR(100) NULL,
+    amount DECIMAL(12, 2) NOT NULL,
+    currency VARCHAR(10) NOT NULL DEFAULT 'INR',
+    tier VARCHAR(50) NOT NULL,
+    billing_period INT NOT NULL DEFAULT 1,
+    period_type VARCHAR(20) NOT NULL DEFAULT 'month',
+    features JSON NOT NULL,
+    status VARCHAR(50) NOT NULL DEFAULT 'PAID',
+    raw_payload JSON NULL,
+    paid_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_org (organization_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`;
+
+const EDGE_WORKER_CODE = `/**
+ * Edge Webhook Receiver (Cloudflare Workers / Supabase Edge / Node.js)
+ * Receives signed PAYMENT.SUCCESS event from Payment Hub Outbox and inserts into database.
+ */
 import crypto from "crypto";
 
-export async function POST(req: NextRequest) {
-  try {
-    const rawBody = await req.text();
-    const signature = req.headers.get("x-hub-signature");
-    const webhookSecret = process.env.PAYMENT_HUB_WEBHOOK_SECRET;
+export async function handlePaymentWebhook(req: Request, env: any) {
+  const signature = req.headers.get("x-webhook-signature");
+  const timestamp = req.headers.get("x-webhook-timestamp");
+  const rawBody = await req.text();
 
-    if (!webhookSecret) {
-      return NextResponse.json({ error: "Server misconfiguration" }, { status: 500 });
-    }
+  // 1. Verify HMAC-SHA256 Signature
+  const expectedSignature = crypto
+    .createHmac("sha256", env.PAYMENT_HUB_WEBHOOK_SECRET)
+    .update(\`\${timestamp}.\${rawBody}\`)
+    .digest("hex");
 
-    const expectedSignature = crypto
-      .createHmac("sha256", webhookSecret)
-      .update(rawBody)
-      .digest("hex");
-
-    if (signature !== expectedSignature) {
-      return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
-    }
-
-    const { payload } = JSON.parse(rawBody);
-
-    if (payload.event_type === "PAYMENT.SUCCESS") {
-      console.log(\`✅ Order \${payload.order_id} marked PAID for ₹\${payload.amount}\`);
-    }
-
-    return NextResponse.json({ received: true });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  if (signature !== expectedSignature) {
+    return new Response(JSON.stringify({ error: "Invalid signature" }), { status: 401 });
   }
-}`}
-                />
+
+  const payload = JSON.parse(rawBody);
+  const { event, data } = payload;
+
+  if (event === "PAYMENT.SUCCESS") {
+    // 2. Insert into app_payment_transactions
+    // The PostgreSQL trigger will automatically activate the app_subscriptions license!
+    await db.query(\`
+      INSERT INTO app_payment_transactions (
+        order_id, cf_payment_id, organization_id, user_id,
+        amount, currency, tier, billing_period, period_type, features, raw_payload
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      ON CONFLICT (order_id) DO NOTHING
+    \`, [
+      data.orderId,
+      data.paymentId,
+      data.metadata?.organizationId || "DEFAULT_ORG",
+      data.metadata?.userId || null,
+      data.amount,
+      data.currency || "INR",
+      data.metadata?.tier || "Professional",
+      data.metadata?.billingPeriod || 1,
+      data.metadata?.periodType || "month",
+      JSON.stringify(data.metadata?.features || []),
+      JSON.stringify(payload)
+    ]);
+  }
+
+  return new Response(JSON.stringify({ received: true }), { status: 200 });
+}`;
+
+// ============================================================================
+// SIDEBAR NAVIGATION CATEGORIES (ZOHO PAYMENTS STYLE)
+// ============================================================================
+
+interface NavItem {
+  id: string;
+  title: string;
+  badge?: string;
+}
+
+interface NavCategory {
+  title: string;
+  icon: any;
+  items: NavItem[];
+}
+
+const NAV_CATEGORIES: NavCategory[] = [
+  {
+    title: "Getting Started",
+    icon: BookOpen,
+    items: [
+      { id: "overview", title: "Overview" },
+      { id: "quickstart", title: "Quickstart (6-Step Flow)", badge: "Core" },
+      { id: "architecture", title: "Architecture & Matrix" },
+    ],
+  },
+  {
+    title: "Web Integration",
+    icon: Globe,
+    items: [
+      { id: "react", title: "Pure React (Zero Backend)", badge: "Popular" },
+      { id: "nextjs", title: "Next.js App Router" },
+      { id: "universal-sdk", title: "Universal Client SDK" },
+      { id: "modal-hook", title: "Drop-in Modal & Hooks" },
+    ],
+  },
+  {
+    title: "Database Sync & Webhooks",
+    icon: Database,
+    items: [
+      { id: "db-sync-overview", title: "Database Sync Overview" },
+      { id: "postgres-schema", title: "PostgreSQL & Supabase" },
+      { id: "mysql-schema", title: "MySQL 8.0+ Schema" },
+      { id: "webhooks", title: "Signed Webhooks & Handlers" },
+      { id: "edge-worker", title: "Edge Functions & Workers" },
+    ],
+  },
+  {
+    title: "Subscriptions & Licensing",
+    icon: Sliders,
+    items: [
+      { id: "plans-setup", title: "Plans & Pricing Setup" },
+      { id: "entitlements", title: "Entitlement Checks (/check)" },
+      { id: "expiration", title: "Automated Expiration" },
+    ],
+  },
+  {
+    title: "APIs & Security",
+    icon: Lock,
+    items: [
+      { id: "api-reference", title: "REST API Reference", badge: "v1" },
+      { id: "signature-verification", title: "Signature Verification (HMAC)" },
+      { id: "error-codes", title: "Error Codes & Rate Limits" },
+    ],
+  },
+  {
+    title: "Testing & Sandbox",
+    icon: Cpu,
+    items: [
+      { id: "sandbox-testing", title: "Cashfree Sandbox & Cards" },
+      { id: "simulation-script", title: "Automated Simulator Script" },
+      { id: "go-live", title: "Go-Live Production Checklist" },
+    ],
+  },
+  {
+    title: "AI Tools",
+    icon: Bot,
+    items: [
+      { id: "ai-prompt-react", title: "React AI Auto-Prompt" },
+      { id: "ai-prompt-nextjs", title: "Next.js AI Auto-Prompt" },
+    ],
+  },
+];
+
+// ============================================================================
+// MAIN COMPONENT
+// ============================================================================
+
+export default function GuidePage() {
+  const [activeSection, setActiveSection] = useState<string>("overview");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
+  const [nextjsSubTab, setNextjsSubTab] = useState<"client" | "fullstack">("client");
+
+  const toggleCategory = (catTitle: string) => {
+    setCollapsedCategories((prev) => ({
+      ...prev,
+      [catTitle]: !prev[catTitle],
+    }));
+  };
+
+  // Filtered Navigation based on search
+  const filteredCategories = useMemo(() => {
+    if (!searchQuery.trim()) return NAV_CATEGORIES;
+    const query = searchQuery.toLowerCase();
+    return NAV_CATEGORIES.map((cat) => ({
+      ...cat,
+      items: cat.items.filter(
+        (item) =>
+          item.title.toLowerCase().includes(query) ||
+          cat.title.toLowerCase().includes(query)
+      ),
+    })).filter((cat) => cat.items.length > 0);
+  }, [searchQuery]);
+
+  return (
+    <div className="flex-1 -m-6 md:-m-8 min-h-screen bg-[#070b12] text-slate-100 flex flex-col font-sans">
+      {/* Top Bar matching Zoho Developer Docs style */}
+      <header className="sticky top-0 z-30 h-14 bg-[#0a0f1d]/95 backdrop-blur border-b border-slate-800/80 px-6 flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center font-black text-white text-base shadow-md shadow-blue-900/40">
+              P
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-sm tracking-tight text-white">Payment Hub</span>
+                <span className="text-[10px] px-1.5 py-0.2 rounded bg-blue-500/10 text-blue-400 font-semibold border border-blue-500/20">
+                  Developer Docs
+                </span>
               </div>
-            )}
+            </div>
           </div>
-        )}
+        </div>
 
-        {/* ========================================================================= */}
-        {/* PURE REACT (VITE / CRA) */}
-        {/* ========================================================================= */}
-        {framework === "react" && (
-          <div className="space-y-6">
-            {activeTab === "overview" && (
-              <div className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="p-5 rounded-xl border border-slate-800 bg-slate-800/40 space-y-2">
-                    <div className="w-8 h-8 rounded-lg bg-cyan-500/10 text-cyan-400 flex items-center justify-center font-bold text-sm">
-                      1
+        {/* Center Search Input */}
+        <div className="flex-1 max-w-md mx-6">
+          <div className="relative">
+            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search documentation, hooks, schemas, APIs..."
+              className="w-full pl-9 pr-3 py-1.5 rounded-lg bg-slate-900/90 border border-slate-700/80 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition"
+            />
+          </div>
+        </div>
+
+        {/* Right Actions */}
+        <div className="flex items-center gap-3">
+          <span className="hidden sm:inline-flex text-[11px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+            Cashfree v2023 • Live Ready
+          </span>
+          <Link
+            href="/apps"
+            className="text-xs px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold transition flex items-center gap-1.5 shadow-sm"
+          >
+            <span>Apps Registry</span>
+            <ExternalLink className="w-3 h-3" />
+          </Link>
+        </div>
+      </header>
+
+      {/* Main Two-Column Layout */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* ================================================================= */}
+        {/* LEFT SIDEBAR NAVIGATION (Collapsible tree like Zoho Docs) */}
+        {/* ================================================================= */}
+        <aside className="w-64 shrink-0 bg-[#070b14] border-r border-slate-800/80 p-3 overflow-y-auto hidden md:block">
+          <nav className="space-y-4">
+            {filteredCategories.map((cat) => {
+              const Icon = cat.icon;
+              const isCollapsed = collapsedCategories[cat.title] || false;
+              return (
+                <div key={cat.title} className="space-y-1">
+                  <button
+                    onClick={() => toggleCategory(cat.title)}
+                    className="w-full flex items-center justify-between px-2 py-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-400 hover:text-slate-200 transition"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Icon className="w-3.5 h-3.5 text-blue-400" />
+                      <span>{cat.title}</span>
                     </div>
-                    <h4 className="font-semibold text-slate-100 text-sm">Direct Browser Call</h4>
-                    <p className="text-xs text-slate-400 leading-relaxed">
-                      Your React app calls <code className="text-cyan-400">POST /api/v1/orders</code> directly with just your Public <code className="text-cyan-400">x-client-id</code> header. No backend needed!
+                    {isCollapsed ? (
+                      <ChevronRight className="w-3.5 h-3.5 text-slate-500" />
+                    ) : (
+                      <ChevronDown className="w-3.5 h-3.5 text-slate-500" />
+                    )}
+                  </button>
+
+                  {!isCollapsed && (
+                    <div className="pl-3.5 space-y-0.5 border-l border-slate-800/80 ml-3">
+                      {cat.items.map((item) => {
+                        const isActive = activeSection === item.id;
+                        return (
+                          <button
+                            key={item.id}
+                            onClick={() => setActiveSection(item.id)}
+                            className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs font-medium text-left transition ${
+                              isActive
+                                ? "bg-blue-600/15 text-blue-400 font-semibold border-l-2 border-blue-500 -ml-[1px]"
+                                : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/40"
+                            }`}
+                          >
+                            <span className="truncate">{item.title}</span>
+                            {item.badge && (
+                              <span
+                                className={`text-[9px] px-1.5 py-0.2 rounded font-bold ${
+                                  item.badge === "Popular"
+                                    ? "bg-amber-500/15 text-amber-400 border border-amber-500/20"
+                                    : "bg-blue-500/15 text-blue-400 border border-blue-500/20"
+                                }`}
+                              >
+                                {item.badge}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </nav>
+        </aside>
+
+        {/* ================================================================= */}
+        {/* RIGHT MAIN CONTENT AREA */}
+        {/* ================================================================= */}
+        <main className="flex-1 p-6 lg:p-10 overflow-y-auto max-w-5xl">
+          {/* =============================================================== */}
+          {/* 1. OVERVIEW PAGE (1:1 Match with Zoho Reference Image 4) */}
+          {/* =============================================================== */}
+          {activeSection === "overview" && (
+            <div className="space-y-8 animate-in fade-in duration-200">
+              {/* Header Box */}
+              <div className="space-y-3 border-b border-slate-800 pb-6">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div>
+                    <h1 className="text-3xl font-extrabold text-white tracking-tight">
+                      Payment Hub — Developer Documentation
+                    </h1>
+                    <p className="text-sm text-slate-300 mt-2 max-w-3xl leading-relaxed">
+                      Payment Hub is a unified payment solution and multi-tenant licensing aggregator that simplifies payment collection and automated SaaS entitlements for <strong>20+ tenant applications</strong> (Payroll, Real Estate CRM, ERP, Autodialer, MVIS). It supports multiple payment methods, works seamlessly with your client apps, and ensures compliance with financial regulations, making it easier for businesses to handle their payments securely and efficiently.
+                    </p>
+                    <p className="text-xs text-slate-400 mt-2">
+                      Using our APIs, webhooks, and universal client SDK, you can build a flexible and scalable payment experience. Explore our documentation to integrate Payment Hub with external applications.
                     </p>
                   </div>
-
-                  <div className="p-5 rounded-xl border border-slate-800 bg-slate-800/40 space-y-2">
-                    <div className="w-8 h-8 rounded-lg bg-indigo-500/10 text-indigo-400 flex items-center justify-center font-bold text-sm">
-                      2
-                    </div>
-                    <h4 className="font-semibold text-slate-100 text-sm">Cashfree Drop-in Modal</h4>
-                    <p className="text-xs text-slate-400 leading-relaxed">
-                      The official Cashfree JS library mounts a checkout popup over your React page. Homebuyers pay via UPI, Card, or NetBanking without page redirection.
-                    </p>
-                  </div>
-
-                  <div className="p-5 rounded-xl border border-slate-800 bg-slate-800/40 space-y-2">
-                    <div className="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center font-bold text-sm">
-                      3
-                    </div>
-                    <h4 className="font-semibold text-slate-100 text-sm">Instant Status Polling</h4>
-                    <p className="text-xs text-slate-400 leading-relaxed">
-                      Once the customer completes the payment, the React hook polls <code className="text-emerald-400">GET /api/v1/orders/:id/status</code> to show a success confirmation receipt.
-                    </p>
+                  <div className="flex flex-col sm:flex-row md:flex-col gap-2 shrink-0">
+                    <button
+                      onClick={() => setActiveSection("ai-prompt-react")}
+                      className="px-3.5 py-2 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition shadow-sm"
+                    >
+                      <Bot className="w-3.5 h-3.5" />
+                      <span>Copy AI Prompt</span>
+                    </button>
+                    <button
+                      onClick={() => setActiveSection("quickstart")}
+                      className="px-3.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold flex items-center justify-center gap-1.5 transition"
+                    >
+                      <CheckSquare className="w-3.5 h-3.5 text-blue-400" />
+                      <span>6-Step Quickstart</span>
+                    </button>
                   </div>
                 </div>
               </div>
-            )}
 
-            {activeTab === "env" && (
-              <div className="space-y-4">
-                <CodeBlock
-                  title="Vite React Environment File"
-                  filePath=".env"
-                  code={`# -------------------------------------------------------------
-# Pure React Frontend (Vite)
-# -------------------------------------------------------------
+              {/* 4 FEATURE CARDS GRID (Matches Reference Image 4) */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                {/* CARD 1: No-Code & Low-Code Solutions (Client-Only) */}
+                <div
+                  onClick={() => setActiveSection("react")}
+                  className="group p-5 rounded-2xl border border-slate-800 bg-[#0d1424] hover:border-blue-500/50 hover:bg-[#111a30] transition cursor-pointer shadow-lg space-y-4 flex flex-col justify-between"
+                >
+                  <div className="space-y-4">
+                    {/* Visual Card Wireframe Mockup */}
+                    <div className="h-28 rounded-xl bg-slate-900/90 border border-slate-800 p-3 flex flex-col justify-between group-hover:border-slate-700 transition">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold text-cyan-400 px-2 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/20">
+                          Client Drop-in Modal
+                        </span>
+                        <div className="flex gap-1">
+                          <div className="w-2 h-2 rounded-full bg-slate-700" />
+                          <div className="w-2 h-2 rounded-full bg-slate-700" />
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <div className="h-3 w-2/3 rounded bg-slate-800" />
+                        <div className="h-2 w-1/2 rounded bg-slate-800/60" />
+                      </div>
+                      <div className="flex items-center justify-between pt-1 border-t border-slate-800">
+                        <span className="text-[10px] text-slate-400">Zero Backend Required</span>
+                        <div className="px-2 py-0.5 rounded bg-blue-600 text-[10px] text-white font-bold">
+                          Pay ₹5,000
+                        </div>
+                      </div>
+                    </div>
 
-VITE_PAYMENT_HUB_URL="http://localhost:3000/api/v1"
-VITE_PAYMENT_HUB_CLIENT_ID="pub_live_your_app_id_here"`}
-                />
+                    <div>
+                      <h3 className="text-base font-bold text-white group-hover:text-blue-400 transition flex items-center justify-between">
+                        <span>No-Code & Low-Code Solutions</span>
+                        <ArrowRight className="w-4 h-4 text-slate-500 group-hover:text-blue-400 group-hover:translate-x-1 transition" />
+                      </h3>
+                      <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+                        Accept payments and check licenses instantly in Pure React / Vite SPAs with client-side drop-in modals, payment links, and zero-backend integration.
+                      </p>
+                    </div>
+                  </div>
+
+                  <span className="text-xs font-semibold text-blue-400 flex items-center gap-1">
+                    Explore Pure React Guide <ArrowRight className="w-3 h-3" />
+                  </span>
+                </div>
+
+                {/* CARD 2: Web Integration */}
+                <div
+                  onClick={() => setActiveSection("nextjs")}
+                  className="group p-5 rounded-2xl border border-slate-800 bg-[#0d1424] hover:border-indigo-500/50 hover:bg-[#111a30] transition cursor-pointer shadow-lg space-y-4 flex flex-col justify-between"
+                >
+                  <div className="space-y-4">
+                    {/* Visual Card Wireframe Mockup */}
+                    <div className="h-28 rounded-xl bg-slate-900/90 border border-slate-800 p-3 flex flex-col justify-between group-hover:border-slate-700 transition">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold text-indigo-400 px-2 py-0.5 rounded bg-indigo-500/10 border border-indigo-500/20">
+                          Web Integration
+                        </span>
+                        <Code2 className="w-4 h-4 text-indigo-400" />
+                      </div>
+                      <div className="space-y-1.5 font-mono text-[10px] text-slate-400 bg-slate-950 p-1.5 rounded">
+                        <div>const &#123; pay &#125; = usePaymentHub();</div>
+                      </div>
+                      <div className="flex items-center justify-between pt-1 border-t border-slate-800">
+                        <span className="text-[10px] text-slate-400">Next.js App Router</span>
+                        <span className="text-[10px] text-emerald-400 font-bold">2 Env Vars</span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <h3 className="text-base font-bold text-white group-hover:text-indigo-400 transition flex items-center justify-between">
+                        <span>Web Integration</span>
+                        <ArrowRight className="w-4 h-4 text-slate-500 group-hover:text-indigo-400 group-hover:translate-x-1 transition" />
+                      </h3>
+                      <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+                        Embed the Payment Hub checkout widget and entitlement verification hooks directly into your React, Next.js, or SPA frontend.
+                      </p>
+                    </div>
+                  </div>
+
+                  <span className="text-xs font-semibold text-indigo-400 flex items-center gap-1">
+                    Explore Web SDK <ArrowRight className="w-3 h-3" />
+                  </span>
+                </div>
+
+                {/* CARD 3: Database Sync & Webhooks */}
+                <div
+                  onClick={() => setActiveSection("postgres-schema")}
+                  className="group p-5 rounded-2xl border border-slate-800 bg-[#0d1424] hover:border-purple-500/50 hover:bg-[#111a30] transition cursor-pointer shadow-lg space-y-4 flex flex-col justify-between"
+                >
+                  <div className="space-y-4">
+                    {/* Visual Card Wireframe Mockup */}
+                    <div className="h-28 rounded-xl bg-slate-900/90 border border-slate-800 p-3 flex flex-col justify-between group-hover:border-slate-700 transition">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold text-purple-400 px-2 py-0.5 rounded bg-purple-500/10 border border-purple-500/20">
+                          Database & Webhooks
+                        </span>
+                        <Database className="w-4 h-4 text-purple-400" />
+                      </div>
+                      <div className="grid grid-cols-2 gap-1.5 text-[9px] font-mono">
+                        <div className="p-1 rounded bg-slate-950 border border-slate-800 text-slate-300">
+                          app_subscriptions
+                        </div>
+                        <div className="p-1 rounded bg-slate-950 border border-slate-800 text-slate-300">
+                          app_transactions
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between pt-1 border-t border-slate-800">
+                        <span className="text-[10px] text-slate-400">PostgreSQL / Supabase / MySQL</span>
+                        <span className="text-[10px] text-purple-400 font-bold">Auto-Sync</span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <h3 className="text-base font-bold text-white group-hover:text-purple-400 transition flex items-center justify-between">
+                        <span>Database Sync & Webhooks</span>
+                        <ArrowRight className="w-4 h-4 text-slate-500 group-hover:text-purple-400 group-hover:translate-x-1 transition" />
+                      </h3>
+                      <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+                        Automatically sync paid orders, subscriptions, and active licenses directly into PostgreSQL, Supabase, or MySQL via signed webhooks.
+                      </p>
+                    </div>
+                  </div>
+
+                  <span className="text-xs font-semibold text-purple-400 flex items-center gap-1">
+                    Explore Database Sync <ArrowRight className="w-3 h-3" />
+                  </span>
+                </div>
+
+                {/* CARD 4: API Guide & Licensing Engine */}
+                <div
+                  onClick={() => setActiveSection("api-reference")}
+                  className="group p-5 rounded-2xl border border-slate-800 bg-[#0d1424] hover:border-emerald-500/50 hover:bg-[#111a30] transition cursor-pointer shadow-lg space-y-4 flex flex-col justify-between"
+                >
+                  <div className="space-y-4">
+                    {/* Visual Card Wireframe Mockup */}
+                    <div className="h-28 rounded-xl bg-slate-900/90 border border-slate-800 p-3 flex flex-col justify-between group-hover:border-slate-700 transition">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold text-emerald-400 px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 font-mono">
+                          &#123; API &#125; Guide
+                        </span>
+                        <Terminal className="w-4 h-4 text-emerald-400" />
+                      </div>
+                      <div className="flex gap-2 text-[10px] font-mono">
+                        <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400">POST /orders</span>
+                        <span className="px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400">GET /check</span>
+                      </div>
+                      <div className="flex items-center justify-between pt-1 border-t border-slate-800">
+                        <span className="text-[10px] text-slate-400">RESTful Architecture</span>
+                        <span className="text-[10px] text-emerald-400 font-bold">HMAC Verified</span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <h3 className="text-base font-bold text-white group-hover:text-emerald-400 transition flex items-center justify-between">
+                        <span>API Guide & Licensing Engine</span>
+                        <ArrowRight className="w-4 h-4 text-slate-500 group-hover:text-emerald-400 group-hover:translate-x-1 transition" />
+                      </h3>
+                      <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+                        Secure APIs using REST principles to integrate Payment Hub with your applications, check entitlements, and monitor delivery across tenant apps.
+                      </p>
+                    </div>
+                  </div>
+
+                  <span className="text-xs font-semibold text-emerald-400 flex items-center gap-1">
+                    Explore API Reference <ArrowRight className="w-3 h-3" />
+                  </span>
+                </div>
               </div>
-            )}
 
-            {activeTab === "hook" && (
+              {/* QUICKSTART SECTION PREVIEW */}
+              <div className="p-6 rounded-2xl bg-gradient-to-r from-purple-950/40 via-slate-900 to-blue-950/30 border border-slate-800 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-amber-300" />
+                    <h3 className="text-sm font-bold text-white">Universal 6-Step Implementation Summary</h3>
+                  </div>
+                  <button
+                    onClick={() => setActiveSection("quickstart")}
+                    className="text-xs text-blue-400 hover:text-blue-300 font-semibold flex items-center gap-1"
+                  >
+                    View Step-by-Step Flow <ArrowRight className="w-3 h-3" />
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 text-xs">
+                  {[
+                    { step: "1", title: "Register App", desc: "Get Client ID in /apps" },
+                    { step: "2", title: "Setup Plan", desc: "Configure Tiers & Pricing" },
+                    { step: "3", title: "Install SDK", desc: "paymentHubClient.ts" },
+                    { step: "4", title: "Add Env", desc: "VITE_PAYMENT_HUB_..." },
+                    { step: "5", title: "DB Sync", desc: "Optional DDL & Webhook" },
+                    { step: "6", title: "Verify Live", desc: "Check Active Licenses" },
+                  ].map((s) => (
+                    <div key={s.step} className="p-3 rounded-xl bg-slate-900/80 border border-slate-800 space-y-1">
+                      <span className="w-5 h-5 rounded-full bg-blue-500/20 text-blue-400 font-bold text-[10px] flex items-center justify-center">
+                        {s.step}
+                      </span>
+                      <p className="font-semibold text-slate-200 text-[11px]">{s.title}</p>
+                      <p className="text-[10px] text-slate-400">{s.desc}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* =============================================================== */}
+          {/* 2. QUICKSTART (6-STEP FLOW) */}
+          {/* =============================================================== */}
+          {activeSection === "quickstart" && (
+            <div className="space-y-6 animate-in fade-in duration-200">
+              <div className="space-y-1 border-b border-slate-800 pb-4">
+                <div className="flex items-center gap-2 text-xs text-blue-400 font-semibold uppercase tracking-wider">
+                  <span>Getting Started</span>
+                  <ChevronRight className="w-3 h-3 text-slate-600" />
+                  <span>Quickstart</span>
+                </div>
+                <h2 className="text-2xl font-extrabold text-white">6-Step Setup Flow for Any Tenant Application</h2>
+                <p className="text-xs text-slate-400">
+                  Follow this verified checklist to integrate Payment Hub with any app (Payroll, CRM, ERP, Autodialer).
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                {[
+                  {
+                    step: 1,
+                    title: "Register Your Tenant Application in Payment Hub",
+                    desc: "Go to Applications Registry (/apps) and click '+ Add Application'. Set your App Code (e.g. PAYROLL, CRM, ERP) and copy the generated public Client ID.",
+                    linkText: "Open Applications Registry",
+                    linkHref: "/apps",
+                  },
+                  {
+                    step: 2,
+                    title: "Setup Subscription Pricing Tiers",
+                    desc: "Go to Subscriptions (/subscriptions) and click '+ Setup New Plan'. Select your target application (which permanently locks the product code). Set tier names (e.g. Professional), monthly/annual pricing, user limits, and comma-separated feature flags.",
+                    linkText: "Open Subscriptions Management",
+                    linkHref: "/subscriptions",
+                  },
+                  {
+                    step: 3,
+                    title: "Install Cashfree Web SDK & Copy Client SDK",
+                    desc: "In your application's terminal, run 'npm install @cashfreepayments/cashfree-js'. Then copy 'paymentHubClient.ts' into your project's 'src/lib/' directory.",
+                    code: "npm install @cashfreepayments/cashfree-js",
+                  },
+                  {
+                    step: 4,
+                    title: "Configure Environment Variables",
+                    desc: "Add your Central Payment Hub endpoint and public Client ID to your app's environment file.",
+                    code: `VITE_PAYMENT_HUB_URL="http://localhost:3001/api/v1"\nVITE_PAYMENT_HUB_CLIENT_ID="pub_live_..."`,
+                  },
+                  {
+                    step: 5,
+                    title: "If App Has Database: Execute Sync DDL & Set Webhook",
+                    desc: "Run the standard DDL schema (PostgreSQL / Supabase or MySQL) in your app's database. In Payment Hub /apps, edit your app and set Webhook Destination URL to your app's webhook receiver route.",
+                  },
+                  {
+                    step: 6,
+                    title: "Verify License Activation in Live Dashboards",
+                    desc: "Perform a test payment via Cashfree Sandbox. Verify that the license appears in the Active Licenses Ledger and that the webhook delivered cleanly in Outbox Queue (/outbox).",
+                    linkText: "View Outbox Queue",
+                    linkHref: "/outbox",
+                  },
+                ].map((item) => (
+                  <div key={item.step} className="p-4 rounded-xl border border-slate-800 bg-[#0d1424] space-y-2">
+                    <div className="flex items-start gap-3">
+                      <div className="w-6 h-6 rounded-full bg-blue-600/20 text-blue-400 font-bold text-xs flex items-center justify-center shrink-0 border border-blue-500/30">
+                        {item.step}
+                      </div>
+                      <div className="space-y-1 flex-1">
+                        <h4 className="font-bold text-sm text-white">{item.title}</h4>
+                        <p className="text-xs text-slate-300 leading-relaxed">{item.desc}</p>
+                        {item.linkText && item.linkHref && (
+                          <Link
+                            href={item.linkHref}
+                            className="inline-flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 font-semibold pt-1"
+                          >
+                            <span>{item.linkText}</span>
+                            <ExternalLink className="w-3 h-3" />
+                          </Link>
+                        )}
+                        {item.code && (
+                          <div className="pt-2">
+                            <pre className="p-2.5 rounded-lg bg-slate-950 font-mono text-xs text-slate-300 border border-slate-800 overflow-x-auto">
+                              {item.code}
+                            </pre>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* =============================================================== */}
+          {/* 3. ARCHITECTURE & MATRIX */}
+          {/* =============================================================== */}
+          {activeSection === "architecture" && (
+            <div className="space-y-6 animate-in fade-in duration-200">
+              <div className="space-y-1 border-b border-slate-800 pb-4">
+                <div className="flex items-center gap-2 text-xs text-blue-400 font-semibold uppercase tracking-wider">
+                  <span>Getting Started</span>
+                  <ChevronRight className="w-3 h-3 text-slate-600" />
+                  <span>Architecture</span>
+                </div>
+                <h2 className="text-2xl font-extrabold text-white">Path A (Client-Only) vs Path B (Database Sync)</h2>
+                <p className="text-xs text-slate-400">
+                  Payment Hub is built to support both lightweight SPAs and heavyweight enterprise database-backed apps with zero conflicts.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="p-5 rounded-2xl border border-cyan-500/30 bg-cyan-950/20 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <span className="w-6 h-6 rounded-md bg-cyan-500/20 text-cyan-400 font-bold text-xs flex items-center justify-center">
+                      A
+                    </span>
+                    <h3 className="font-bold text-sm text-white">Path A: Client-Only (Zero Backend)</h3>
+                  </div>
+                  <p className="text-xs text-slate-300 leading-relaxed">
+                    Designed for React, Vite, Vue, or static SPAs without their own backend server or database.
+                  </p>
+                  <ul className="text-xs text-slate-300 space-y-1.5 list-disc list-inside">
+                    <li>Uses public Client ID (<code className="text-cyan-300">x-client-id</code>)</li>
+                    <li>Built-in CORS directly allows browser calls</li>
+                    <li>Cashfree Checkout launches directly in a drop-in modal</li>
+                    <li>Checks active license on-demand via <code className="text-cyan-300">/subscriptions/check</code></li>
+                  </ul>
+                </div>
+
+                <div className="p-5 rounded-2xl border border-purple-500/30 bg-purple-950/20 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <span className="w-6 h-6 rounded-md bg-purple-500/20 text-purple-400 font-bold text-xs flex items-center justify-center">
+                      B
+                    </span>
+                    <h3 className="font-bold text-sm text-white">Path B: Database Sync (Postgres & MySQL)</h3>
+                  </div>
+                  <p className="text-xs text-slate-300 leading-relaxed">
+                    Designed for applications with their own PostgreSQL, Supabase, or MySQL databases.
+                  </p>
+                  <ul className="text-xs text-slate-300 space-y-1.5 list-disc list-inside">
+                    <li>Standard tables (<code className="text-purple-300">app_subscriptions</code> & <code className="text-purple-300">app_payment_transactions</code>)</li>
+                    <li>Signed webhooks dispatched on payment completion</li>
+                    <li>Database triggers immediately provision licenses locally</li>
+                    <li>Zero external network latency for entitlement checks inside your app</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* =============================================================== */}
+          {/* 4. PURE REACT (ZERO BACKEND) */}
+          {/* =============================================================== */}
+          {activeSection === "react" && (
+            <div className="space-y-6 animate-in fade-in duration-200">
+              <div className="space-y-1 border-b border-slate-800 pb-4">
+                <div className="flex items-center gap-2 text-xs text-blue-400 font-semibold uppercase tracking-wider">
+                  <span>Web Integration</span>
+                  <ChevronRight className="w-3 h-3 text-slate-600" />
+                  <span>Pure React</span>
+                </div>
+                <h2 className="text-2xl font-extrabold text-white">Pure React / Vite (Zero Backend Required)</h2>
+                <p className="text-xs text-slate-400">
+                  Connect your React frontend using only 2 public environment variables. No server routes or database required.
+                </p>
+              </div>
+
               <div className="space-y-4">
                 <CodeBlock
-                  title="Universal React Payment Hook"
-                  filePath="src/hooks/usePaymentHub.ts"
-                  code={`import { useState } from "react";
-import { load } from "@cashfreepayments/cashfree-js";
+                  title="1. Configure React Environment (.env)"
+                  filePath=".env"
+                  code={`# Central Payment Hub Client Configuration\nVITE_PAYMENT_HUB_URL="http://localhost:3001/api/v1"\nVITE_PAYMENT_HUB_CLIENT_ID="<YOUR_PUBLIC_CLIENT_ID>"`}
+                />
 
-export interface InitiatePaymentParams {
-  orderId?: string;
-  amount: number;
-  customerPhone: string;
-  customerName?: string;
-  customerEmail?: string;
-  orderNote?: string;
-  onSuccess?: (paymentId: string) => void;
-  onFailure?: (error: string) => void;
-}
+                <CodeBlock
+                  title="2. React Payment Hook (src/hooks/usePaymentHub.ts)"
+                  filePath="src/hooks/usePaymentHub.ts"
+                  code={`"use client";
+
+import { useState } from "react";
+import { load } from "@cashfreepayments/cashfree-js";
 
 export function usePaymentHub() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const pay = async ({
-    orderId = \`ORD_\${Date.now()}_\${Math.floor(Math.random() * 1000)}\`,
-    amount,
-    customerPhone,
-    customerName = "Valued Customer",
-    customerEmail = "customer@example.com",
-    orderNote = "React Store Checkout",
-    onSuccess,
-    onFailure,
-  }: InitiatePaymentParams) => {
+  const pay = async (params: {
+    amount: number;
+    customerPhone: string;
+    customerName?: string;
+    customerEmail?: string;
+    orderNote?: string;
+    onSuccess?: (paymentId: string) => void;
+    onFailure?: (err: string) => void;
+  }) => {
     setLoading(true);
     setError(null);
 
-    const hubUrl =
-      (typeof import.meta !== "undefined" && import.meta.env?.VITE_PAYMENT_HUB_URL) ||
-      process.env.REACT_APP_PAYMENT_HUB_URL ||
-      "http://localhost:3000/api/v1";
-
-    const clientId =
-      (typeof import.meta !== "undefined" && import.meta.env?.VITE_PAYMENT_HUB_CLIENT_ID) ||
-      process.env.REACT_APP_PAYMENT_HUB_CLIENT_ID ||
-      "";
+    const hubUrl = import.meta.env.VITE_PAYMENT_HUB_URL || "http://localhost:3001/api/v1";
+    const clientId = import.meta.env.VITE_PAYMENT_HUB_CLIENT_ID;
 
     try {
+      // 1. Create Order
       const res = await fetch(\`\${hubUrl}/orders\`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-client-id": clientId,
-        },
-        body: JSON.stringify({
-          order_id: orderId,
-          order_amount: Number(amount),
-          order_currency: "INR",
-          customer_details: {
-            customer_id: \`CUST_\${customerPhone}\`,
-            customer_phone: customerPhone,
-            customer_name: customerName,
-            customer_email: customerEmail,
-          },
-          order_note: orderNote,
-        }),
+        headers: { "Content-Type": "application/json", "x-client-id": clientId },
+        body: JSON.stringify(params),
       });
-
       const data = await res.json();
-      if (!data.success || !data.payment_session_id) {
-        throw new Error(data.error || "Failed to create payment session");
-      }
+      if (!res.ok || !data.payment_session_id) throw new Error(data.error || "Order creation failed");
 
-      const cashfree = await load({
-        mode: process.env.NODE_ENV === "production" ? "production" : "sandbox",
-      });
-
+      // 2. Launch Cashfree Drop-in Modal
+      const cashfree = await load({ mode: "sandbox" });
       const result = await cashfree.checkout({
         paymentSessionId: data.payment_session_id,
         redirectTarget: "_modal",
       });
 
       if (result.error) {
-        const errMsg = result.error.message || "Payment cancelled";
-        setError(errMsg);
-        onFailure?.(errMsg);
+        setError(result.error.message || "Payment aborted");
+        if (params.onFailure) params.onFailure(result.error.message || "Payment aborted");
         return;
       }
 
-      pollStatus(orderId, hubUrl, clientId, onSuccess, onFailure);
+      if (params.onSuccess) params.onSuccess(data.order_id);
     } catch (err: any) {
-      const errMsg = err.message || "Network error launching payment";
-      setError(errMsg);
-      onFailure?.(errMsg);
+      setError(err.message || "Payment failed");
+      if (params.onFailure) params.onFailure(err.message);
     } finally {
       setLoading(false);
     }
   };
 
-  const pollStatus = (
-    orderId: string,
-    hubUrl: string,
-    clientId: string,
-    onSuccess?: (paymentId: string) => void,
-    onFailure?: (err: string) => void
-  ) => {
-    let attempts = 0;
-    const interval = setInterval(async () => {
-      attempts++;
-      try {
-        const res = await fetch(\`\${hubUrl}/orders/\${orderId}/status\`, {
-          headers: { "x-client-id": clientId },
-        });
-        const statusData = await res.json();
-
-        if (statusData.status === "PAID") {
-          clearInterval(interval);
-          onSuccess?.(statusData.latest_payment?.cfPaymentId || "CONFIRMED");
-        } else if (attempts >= 6) {
-          clearInterval(interval);
-          onSuccess?.("PENDING_VERIFICATION");
-        }
-      } catch {
-        clearInterval(interval);
-        onFailure?.("Failed to check status");
-      }
-    }, 1500);
-  };
-
   return { pay, loading, error };
 }`}
                 />
-              </div>
-            )}
 
-            {activeTab === "component" && (
-              <div className="space-y-4">
                 <CodeBlock
-                  title="React Checkout Component"
-                  filePath="src/components/CheckoutPage.tsx"
-                  code={`import React, { useState } from "react";
-import { usePaymentHub } from "../hooks/usePaymentHub";
+                  title="3. Client Checkout Component (src/components/CheckoutButton.tsx)"
+                  filePath="src/components/CheckoutButton.tsx"
+                  code={`import React from "react";
+import { usePaymentHub } from "@/hooks/usePaymentHub";
 
-export function CheckoutPage() {
+export function CheckoutButton({ amount = 5000 }: { amount?: number }) {
   const { pay, loading, error } = usePaymentHub();
-  const [paymentSuccess, setPaymentSuccess] = useState<string | null>(null);
 
-  const handlePay = () => {
-    setPaymentSuccess(null);
-
+  const handleCheckout = () => {
     pay({
-      amount: 499.00,
+      amount,
       customerPhone: "9876543210",
-      customerName: "Aarav Sharma",
-      customerEmail: "aarav@example.com",
-      orderNote: "Premium React Subscription",
+      customerName: "Acme Corp Admin",
+      customerEmail: "admin@acme.com",
+      orderNote: "Professional Plan Upgrade",
       onSuccess: (paymentId) => {
-        setPaymentSuccess(\`🎉 Payment Confirmed! Transaction ID: \${paymentId}\`);
+        alert("Payment Succeeded! License activated: " + paymentId);
+        window.location.reload();
       },
-      onFailure: (err) => {
-        console.error("Payment failed or cancelled:", err);
-      },
+      onFailure: (err) => alert("Payment Failed: " + err),
     });
   };
 
   return (
-    <div style={{ maxWidth: "450px", margin: "40px auto", padding: "20px", border: "1px solid #e2e8f0", borderRadius: "12px" }}>
-      <h2>Order Summary</h2>
-      <p style={{ color: "#64748b" }}>Annual Pro Membership</p>
-      <h3 style={{ fontSize: "1.8rem", margin: "16px 0" }}>₹499.00</h3>
-
+    <div>
       <button
-        onClick={handlePay}
+        onClick={handleCheckout}
         disabled={loading}
-        style={{
-          width: "100%",
-          padding: "14px",
-          backgroundColor: "#06b6d4",
-          color: "#0f172a",
-          fontWeight: "bold",
-          border: "none",
-          borderRadius: "8px",
-          cursor: loading ? "not-allowed" : "pointer",
-          fontSize: "1rem",
-        }}
+        className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs transition"
       >
-        {loading ? "Opening Cashfree..." : "Pay ₹499 with Cashfree"}
+        {loading ? "Launching Payment..." : \`Pay ₹\${amount} & Upgrade\`}
       </button>
-
-      {paymentSuccess && (
-        <div style={{ marginTop: "16px", padding: "12px", background: "#ecfdf5", color: "#065f46", borderRadius: "8px" }}>
-          {paymentSuccess}
-        </div>
-      )}
-
-      {error && (
-        <div style={{ marginTop: "16px", padding: "12px", background: "#fef2f2", color: "#991b1b", borderRadius: "8px" }}>
-          ❌ {error}
-        </div>
-      )}
+      {error && <p className="text-xs text-rose-400 mt-1">{error}</p>}
     </div>
   );
 }`}
                 />
               </div>
-            )}
-          </div>
-        )}
+            </div>
+          )}
 
-        {/* ========================================================================= */}
-        {/* AI ONE-SHOT AGENT PROMPT */}
-        {/* ========================================================================= */}
-        {activeTab === "ai-prompt" && (
-          <div className="space-y-6">
-            <div className="p-4 rounded-xl bg-purple-500/10 border border-purple-500/20 text-slate-200 text-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
-              <div className="space-y-1">
-                <span className="font-bold text-purple-400">🤖 Hands-Free AI Integration Prompt:</span>
-                <p className="text-slate-300">
-                  Paste this exact prompt into your AI coding tool (Cursor Composer, Antigravity, Claude Code, GitHub Copilot Chat). The AI agent will automatically install <code>@cashfreepayments/cashfree-js</code>, create <code>hooks/usePaymentHub.ts</code>, create <code>components/CheckoutButton.tsx</code>, and wire the checkout without asking unwanted questions.
+          {/* =============================================================== */}
+          {/* 5. NEXT.JS APP ROUTER */}
+          {/* =============================================================== */}
+          {activeSection === "nextjs" && (
+            <div className="space-y-6 animate-in fade-in duration-200">
+              <div className="space-y-1 border-b border-slate-800 pb-4">
+                <div className="flex items-center gap-2 text-xs text-blue-400 font-semibold uppercase tracking-wider">
+                  <span>Web Integration</span>
+                  <ChevronRight className="w-3 h-3 text-slate-600" />
+                  <span>Next.js</span>
+                </div>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div>
+                    <h2 className="text-2xl font-extrabold text-white">Next.js 13 / 14 / 15 App Router Integration</h2>
+                    <p className="text-xs text-slate-400">
+                      Choose between <strong>Client-Only (2 Variables)</strong> or <strong>Full-Stack with Server Routes</strong>.
+                    </p>
+                  </div>
+                  <div className="bg-slate-900 p-1 rounded-xl border border-slate-800 flex gap-1 shrink-0">
+                    <button
+                      onClick={() => setNextjsSubTab("client")}
+                      className={`px-3 py-1 rounded-lg text-xs font-semibold transition ${
+                        nextjsSubTab === "client" ? "bg-blue-600 text-white" : "text-slate-400 hover:text-slate-200"
+                      }`}
+                    >
+                      Client-Only (2 Vars)
+                    </button>
+                    <button
+                      onClick={() => setNextjsSubTab("fullstack")}
+                      className={`px-3 py-1 rounded-lg text-xs font-semibold transition ${
+                        nextjsSubTab === "fullstack" ? "bg-indigo-600 text-white" : "text-slate-400 hover:text-slate-200"
+                      }`}
+                    >
+                      Full-Stack (Server Route)
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {nextjsSubTab === "client" ? (
+                <div className="space-y-4">
+                  <CodeBlock
+                    title="1. Next.js .env.local (Only 2 Public Variables)"
+                    filePath=".env.local"
+                    code={`NEXT_PUBLIC_PAYMENT_HUB_URL="http://localhost:3001/api/v1"\nNEXT_PUBLIC_PAYMENT_HUB_CLIENT_ID="<YOUR_PUBLIC_CLIENT_ID>"`}
+                  />
+
+                  <CodeBlock
+                    title="2. Client Hook (hooks/usePaymentHub.ts)"
+                    filePath="hooks/usePaymentHub.ts"
+                    code={`"use client";
+
+import { useState } from "react";
+import { load } from "@cashfreepayments/cashfree-js";
+
+export function usePaymentHub() {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const pay = async (params: {
+    amount: number;
+    customerPhone: string;
+    customerName?: string;
+    customerEmail?: string;
+    orderNote?: string;
+    onSuccess?: (paymentId: string) => void;
+    onFailure?: (err: string) => void;
+  }) => {
+    setLoading(true);
+    setError(null);
+
+    const hubUrl = process.env.NEXT_PUBLIC_PAYMENT_HUB_URL || "http://localhost:3001/api/v1";
+    const clientId = process.env.NEXT_PUBLIC_PAYMENT_HUB_CLIENT_ID;
+
+    try {
+      const res = await fetch(\`\${hubUrl}/orders\`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-client-id": clientId! },
+        body: JSON.stringify(params),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.payment_session_id) throw new Error(data.error || "Order creation failed");
+
+      const cashfree = await load({ mode: "sandbox" });
+      const result = await cashfree.checkout({
+        paymentSessionId: data.payment_session_id,
+        redirectTarget: "_modal",
+      });
+
+      if (result.error) {
+        setError(result.error.message || "Payment aborted");
+        if (params.onFailure) params.onFailure(result.error.message || "Payment aborted");
+        return;
+      }
+
+      if (params.onSuccess) params.onSuccess(data.order_id);
+    } catch (err: any) {
+      setError(err.message || "Payment failed");
+      if (params.onFailure) params.onFailure(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return { pay, loading, error };
+}`}
+                  />
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <CodeBlock
+                    title="1. Next.js Server Route (app/api/create-order/route.ts)"
+                    filePath="app/api/create-order/route.ts"
+                    code={`import { NextResponse } from "next/server";
+
+export async function POST(req: Request) {
+  const body = await req.json();
+
+  const hubRes = await fetch(\`\${process.env.PAYMENT_HUB_URL}/orders\`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-client-id": process.env.PAYMENT_HUB_CLIENT_ID!,
+      "x-client-secret": process.env.PAYMENT_HUB_CLIENT_SECRET!,
+    },
+    body: JSON.stringify(body),
+  });
+
+  const data = await hubRes.json();
+  return NextResponse.json(data, { status: hubRes.status });
+}`}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* =============================================================== */}
+          {/* 6. UNIVERSAL CLIENT SDK */}
+          {/* =============================================================== */}
+          {(activeSection === "universal-sdk" || activeSection === "modal-hook") && (
+            <div className="space-y-6 animate-in fade-in duration-200">
+              <div className="space-y-1 border-b border-slate-800 pb-4">
+                <div className="flex items-center gap-2 text-xs text-blue-400 font-semibold uppercase tracking-wider">
+                  <span>Web Integration</span>
+                  <ChevronRight className="w-3 h-3 text-slate-600" />
+                  <span>Universal SDK</span>
+                </div>
+                <h2 className="text-2xl font-extrabold text-white">Universal Client SDK (paymentHubClient.ts)</h2>
+                <p className="text-xs text-slate-400">
+                  A single drop-in TypeScript class providing checkout, entitlement verification, and plan fetching for any frontend.
                 </p>
               </div>
-              <button
-                onClick={() => copyText(activeAiPrompt, "ai-tab-prompt")}
-                className="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold flex items-center gap-1.5 transition shrink-0"
-              >
-                {copiedSnippet === "ai-tab-prompt" ? (
-                  <>
-                    <Check className="w-3.5 h-3.5 text-emerald-300" />
-                    <span>Copied to Clipboard!</span>
-                  </>
-                ) : (
-                  <>
-                    <Copy className="w-3.5 h-3.5" />
-                    <span>Copy {framework === "nextjs" ? "Next.js" : "React"} Prompt</span>
-                  </>
-                )}
-              </button>
+
+              <CodeBlock
+                title="Universal Payment Hub Client SDK"
+                filePath="src/lib/paymentHubClient.ts"
+                code={CLIENT_SDK_CODE}
+              />
             </div>
+          )}
 
-            <CodeBlock
-              title={
-                framework === "nextjs"
-                  ? "Next.js AI Agent One-Shot Prompt (Copy & Paste)"
-                  : "Pure React AI Agent One-Shot Prompt (Copy & Paste)"
-              }
-              filePath={framework === "nextjs" ? "NEXTJS-AI-AGENT-PROMPT.md" : "REACT-AI-AGENT-PROMPT.md"}
-              code={activeAiPrompt}
-            />
-          </div>
-        )}
-
-        {/* ========================================================================= */}
-        {/* COMMON TESTING & SANDBOX CREDENTIALS */}
-        {/* ========================================================================= */}
-        {activeTab === "testing" && (
-          <div className="space-y-6">
-            <div className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/20 text-slate-200 text-xs">
-              <span className="font-bold text-blue-400">Cashfree Sandbox Ready:</span> Use these official test credentials inside the modal popup to test payments.
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="p-5 rounded-xl border border-slate-700 bg-slate-800/60 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Smartphone className="w-4 h-4 text-emerald-400" />
-                    <h4 className="text-sm font-bold text-white">Test UPI (Fastest)</h4>
-                  </div>
-                  <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                    Instant
-                  </span>
+          {/* =============================================================== */}
+          {/* 7. POSTGRESQL & SUPABASE SCHEMA */}
+          {/* =============================================================== */}
+          {(activeSection === "postgres-schema" || activeSection === "db-sync-overview") && (
+            <div className="space-y-6 animate-in fade-in duration-200">
+              <div className="space-y-1 border-b border-slate-800 pb-4">
+                <div className="flex items-center gap-2 text-xs text-blue-400 font-semibold uppercase tracking-wider">
+                  <span>Database Sync</span>
+                  <ChevronRight className="w-3 h-3 text-slate-600" />
+                  <span>PostgreSQL / Supabase</span>
                 </div>
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-900 border border-slate-700 font-mono text-xs text-emerald-400">
-                    <span>success@upi</span>
-                    <button
-                      onClick={() => copyText("success@upi", "upi-success")}
-                      className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-sans flex items-center gap-1"
-                    >
-                      {copiedSnippet === "upi-success" ? (
-                        <Check className="w-3 h-3 text-emerald-400" />
-                      ) : (
-                        <Copy className="w-3 h-3" />
-                      )}
-                      <span>{copiedSnippet === "upi-success" ? "Copied" : "Copy"}</span>
-                    </button>
-                  </div>
-                  <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-900 border border-slate-700 font-mono text-xs text-rose-400">
-                    <span>failure@upi</span>
-                    <button
-                      onClick={() => copyText("failure@upi", "upi-failure")}
-                      className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-sans flex items-center gap-1"
-                    >
-                      {copiedSnippet === "upi-failure" ? (
-                        <Check className="w-3 h-3 text-emerald-400" />
-                      ) : (
-                        <Copy className="w-3 h-3" />
-                      )}
-                      <span>{copiedSnippet === "upi-failure" ? "Copied" : "Copy"}</span>
-                    </button>
-                  </div>
-                </div>
+                <h2 className="text-2xl font-extrabold text-white">Standard DDL Schema & Trigger (PostgreSQL / Supabase)</h2>
+                <p className="text-xs text-slate-400">
+                  Execute this SQL in your tenant app's database. It creates standard subscription tables and a trigger that auto-activates licenses upon paid orders.
+                </p>
               </div>
 
-              <div className="p-5 rounded-xl border border-slate-700 bg-slate-800/60 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <CreditCard className="w-4 h-4 text-blue-400" />
-                    <h4 className="text-sm font-bold text-white">Test Cards</h4>
-                  </div>
-                  <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                    Simulator
-                  </span>
+              <CodeBlock
+                title="PostgreSQL / Supabase Sync DDL"
+                filePath="tenant_sync_schema.sql"
+                language="sql"
+                code={PG_SYNC_DDL}
+              />
+            </div>
+          )}
+
+          {/* =============================================================== */}
+          {/* 8. MYSQL 8.0+ SCHEMA */}
+          {/* =============================================================== */}
+          {activeSection === "mysql-schema" && (
+            <div className="space-y-6 animate-in fade-in duration-200">
+              <div className="space-y-1 border-b border-slate-800 pb-4">
+                <div className="flex items-center gap-2 text-xs text-blue-400 font-semibold uppercase tracking-wider">
+                  <span>Database Sync</span>
+                  <ChevronRight className="w-3 h-3 text-slate-600" />
+                  <span>MySQL</span>
                 </div>
-                <div className="space-y-2 text-xs">
-                  <div className="flex items-center justify-between p-2 rounded-lg bg-slate-900 border border-slate-700 font-mono text-slate-300">
-                    <span>Visa: 4012 0010 3000 0004</span>
-                    <button
-                      onClick={() => copyText("4012001030000004", "card-visa")}
-                      className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 text-[11px] font-sans flex items-center gap-1"
-                    >
-                      {copiedSnippet === "card-visa" ? (
-                        <Check className="w-3 h-3 text-emerald-400" />
-                      ) : (
-                        <Copy className="w-3 h-3" />
-                      )}
-                      <span>{copiedSnippet === "card-visa" ? "Copied" : "Copy"}</span>
-                    </button>
-                  </div>
-                  <div className="flex items-center justify-between p-2 rounded-lg bg-slate-900 border border-slate-700 font-mono text-slate-300">
-                    <span>MC: 5123 4500 0000 0008</span>
-                    <button
-                      onClick={() => copyText("5123450000000008", "card-mc")}
-                      className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 text-[11px] font-sans flex items-center gap-1"
-                    >
-                      {copiedSnippet === "card-mc" ? (
-                        <Check className="w-3 h-3 text-emerald-400" />
-                      ) : (
-                        <Copy className="w-3 h-3" />
-                      )}
-                      <span>{copiedSnippet === "card-mc" ? "Copied" : "Copy"}</span>
-                    </button>
-                  </div>
-                  <div className="text-[11px] text-slate-400 flex items-center gap-4 pt-1">
-                    <span>Expiry: <strong className="text-slate-200">12/28</strong></span>
-                    <span>CVV: <strong className="text-slate-200">123</strong></span>
-                    <span>OTP: <strong className="text-slate-200">123456</strong></span>
-                  </div>
+                <h2 className="text-2xl font-extrabold text-white">Standard DDL Schema (MySQL 8.0+)</h2>
+                <p className="text-xs text-slate-400">
+                  For PHP, Laravel, Node/Express, or Go backends using MySQL.
+                </p>
+              </div>
+
+              <CodeBlock
+                title="MySQL 8.0+ Sync DDL"
+                filePath="tenant_mysql_schema.sql"
+                language="sql"
+                code={MYSQL_SYNC_DDL}
+              />
+            </div>
+          )}
+
+          {/* =============================================================== */}
+          {/* 9. WEBHOOKS & EDGE WORKERS */}
+          {/* =============================================================== */}
+          {(activeSection === "webhooks" || activeSection === "edge-worker") && (
+            <div className="space-y-6 animate-in fade-in duration-200">
+              <div className="space-y-1 border-b border-slate-800 pb-4">
+                <div className="flex items-center gap-2 text-xs text-blue-400 font-semibold uppercase tracking-wider">
+                  <span>Backend & Webhooks</span>
+                  <ChevronRight className="w-3 h-3 text-slate-600" />
+                  <span>Edge Functions</span>
+                </div>
+                <h2 className="text-2xl font-extrabold text-white">Signed Webhooks & Edge Functions</h2>
+                <p className="text-xs text-slate-400">
+                  Payment Hub dispatches signed HMAC-SHA256 events upon payment completion. Your webhook listener verifies and inserts into your database.
+                </p>
+              </div>
+
+              <CodeBlock
+                title="Edge Webhook Receiver (Cloudflare Workers / Node.js)"
+                filePath="webhook_handler.ts"
+                code={EDGE_WORKER_CODE}
+              />
+            </div>
+          )}
+
+          {/* =============================================================== */}
+          {/* 10. PLANS & PRICING SETUP */}
+          {/* =============================================================== */}
+          {activeSection === "plans-setup" && (
+            <div className="space-y-6 animate-in fade-in duration-200">
+              <div className="space-y-1 border-b border-slate-800 pb-4">
+                <div className="flex items-center gap-2 text-xs text-blue-400 font-semibold uppercase tracking-wider">
+                  <span>Subscriptions & Licensing</span>
+                  <ChevronRight className="w-3 h-3 text-slate-600" />
+                  <span>Plans Setup</span>
+                </div>
+                <h2 className="text-2xl font-extrabold text-white">Configuring Products & Pricing Tiers</h2>
+                <p className="text-xs text-slate-400">
+                  How products and pricing tiers are structured and automatically linked to target applications.
+                </p>
+              </div>
+
+              <div className="p-5 rounded-xl border border-slate-800 bg-[#0d1424] space-y-4">
+                <h3 className="font-bold text-sm text-white">Key Product Identity Rules</h3>
+                <ul className="text-xs text-slate-300 space-y-2 list-disc list-inside leading-relaxed">
+                  <li><strong>Automatic Namespace Lock:</strong> Product Code is strictly derived from the selected target application's <code className="text-blue-400">appCode</code> (e.g. <code className="text-blue-400">REAL_ESTATE_CRM</code>, <code className="text-blue-400">PAYROLL</code>). Arbitrary codes or suffixes (like <code className="text-rose-400">_SAAS</code>) are not allowed.</li>
+                  <li><strong>Multiple Tiers per Product:</strong> You can add multiple pricing tiers (e.g. Starter, Professional, Enterprise) under the same application product.</li>
+                  <li><strong>Feature Flags:</strong> Provide comma-separated flags (e.g. <code className="text-emerald-400">crm_leads, whatsapp_inbox, export_pdf</code>) which are returned during entitlement verification.</li>
+                  <li><strong>Edit & Delete Controls:</strong> Edit any pricing tier directly or delete unused products from the Subscriptions management portal.</li>
+                </ul>
+
+                <Link
+                  href="/subscriptions"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs transition"
+                >
+                  <span>Go to Subscriptions Management</span>
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </Link>
+              </div>
+            </div>
+          )}
+
+          {/* =============================================================== */}
+          {/* 11. ENTITLEMENTS & EXPIRATION */}
+          {/* =============================================================== */}
+          {(activeSection === "entitlements" || activeSection === "expiration") && (
+            <div className="space-y-6 animate-in fade-in duration-200">
+              <div className="space-y-1 border-b border-slate-800 pb-4">
+                <div className="flex items-center gap-2 text-xs text-blue-400 font-semibold uppercase tracking-wider">
+                  <span>Subscriptions & Licensing</span>
+                  <ChevronRight className="w-3 h-3 text-slate-600" />
+                  <span>Entitlements</span>
+                </div>
+                <h2 className="text-2xl font-extrabold text-white">Entitlement Checks & Automated Expiration</h2>
+                <p className="text-xs text-slate-400">
+                  Protect premium routes and features in your tenant apps with high-speed entitlement verification.
+                </p>
+              </div>
+
+              <CodeBlock
+                title="Entitlement Check Endpoint (GET /api/v1/subscriptions/check)"
+                code={`// Example Request:
+GET /api/v1/subscriptions/check?orgId=ORG_ACME&feature=whatsapp_inbox HTTP/1.1
+Host: localhost:3001
+x-client-id: pub_live_payroll_d42a8b9e...
+
+// Example Response (200 OK):
+{
+  "hasAccess": true,
+  "isActive": true,
+  "tier": "Professional",
+  "tierLevel": 2,
+  "daysRemaining": 29,
+  "userLimit": 5,
+  "features": ["crm_leads", "whatsapp_inbox", "export_pdf"],
+  "expiresAt": "2026-12-11T12:00:00.000Z"
+}`}
+              />
+            </div>
+          )}
+
+          {/* =============================================================== */}
+          {/* 12. REST API REFERENCE */}
+          {/* =============================================================== */}
+          {(activeSection === "api-reference" || activeSection === "signature-verification" || activeSection === "error-codes") && (
+            <div className="space-y-6 animate-in fade-in duration-200">
+              <div className="space-y-1 border-b border-slate-800 pb-4">
+                <div className="flex items-center gap-2 text-xs text-blue-400 font-semibold uppercase tracking-wider">
+                  <span>APIs & Security</span>
+                  <ChevronRight className="w-3 h-3 text-slate-600" />
+                  <span>REST API Reference</span>
+                </div>
+                <h2 className="text-2xl font-extrabold text-white">Central Payment Hub REST API Reference</h2>
+                <p className="text-xs text-slate-400">
+                  All endpoints require <code className="text-blue-400">x-client-id</code> in headers.
+                </p>
+              </div>
+
+              <div className="overflow-x-auto rounded-xl border border-slate-800 bg-[#0d1424]">
+                <table className="w-full text-xs text-left">
+                  <thead className="bg-slate-900/90 text-slate-400 font-semibold border-b border-slate-800">
+                    <tr>
+                      <th className="p-3">Method</th>
+                      <th className="p-3">Endpoint</th>
+                      <th className="p-3">Description</th>
+                      <th className="p-3">Auth</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/60 font-mono text-slate-300">
+                    <tr>
+                      <td className="p-3"><span className="text-emerald-400 font-bold">POST</span></td>
+                      <td className="p-3 text-white">/api/v1/orders</td>
+                      <td className="p-3 font-sans text-slate-300">Create Cashfree order & return paymentSessionId</td>
+                      <td className="p-3 text-blue-400">x-client-id</td>
+                    </tr>
+                    <tr>
+                      <td className="p-3"><span className="text-blue-400 font-bold">GET</span></td>
+                      <td className="p-3 text-white">/api/v1/orders/:orderId/status</td>
+                      <td className="p-3 font-sans text-slate-300">Poll payment status (PAID / PENDING / FAILED)</td>
+                      <td className="p-3 text-blue-400">x-client-id</td>
+                    </tr>
+                    <tr>
+                      <td className="p-3"><span className="text-blue-400 font-bold">GET</span></td>
+                      <td className="p-3 text-white">/api/v1/subscriptions/check</td>
+                      <td className="p-3 font-sans text-slate-300">Check organization license & feature flags</td>
+                      <td className="p-3 text-blue-400">x-client-id</td>
+                    </tr>
+                    <tr>
+                      <td className="p-3"><span className="text-blue-400 font-bold">GET</span></td>
+                      <td className="p-3 text-white">/api/v1/subscriptions/offers</td>
+                      <td className="p-3 font-sans text-slate-300">Fetch configured pricing tiers for client app</td>
+                      <td className="p-3 text-blue-400">x-client-id</td>
+                    </tr>
+                    <tr>
+                      <td className="p-3"><span className="text-emerald-400 font-bold">POST</span></td>
+                      <td className="p-3 text-white">/api/v1/webhooks/cashfree</td>
+                      <td className="p-3 font-sans text-slate-300">Cashfree incoming payment webhook receiver</td>
+                      <td className="p-3 text-slate-400">HMAC-SHA256</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* =============================================================== */}
+          {/* 13. SANDBOX & TESTING */}
+          {/* =============================================================== */}
+          {(activeSection === "sandbox-testing" || activeSection === "simulation-script" || activeSection === "go-live") && (
+            <div className="space-y-6 animate-in fade-in duration-200">
+              <div className="space-y-1 border-b border-slate-800 pb-4">
+                <div className="flex items-center gap-2 text-xs text-blue-400 font-semibold uppercase tracking-wider">
+                  <span>Testing & Sandbox</span>
+                  <ChevronRight className="w-3 h-3 text-slate-600" />
+                  <span>Simulator</span>
+                </div>
+                <h2 className="text-2xl font-extrabold text-white">Cashfree Sandbox Test Credentials</h2>
+                <p className="text-xs text-slate-400">
+                  Use these simulated test credentials when checking out in Sandbox mode.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="p-4 rounded-xl border border-slate-800 bg-[#0d1424] space-y-1">
+                  <span className="text-[10px] text-blue-400 font-bold uppercase">Success Card (OTP 777777)</span>
+                  <p className="font-mono text-sm font-bold text-white">4111 1111 1111 1111</p>
+                  <p className="text-[11px] text-slate-400">Exp: 12/28 • CVV: 123</p>
+                </div>
+                <div className="p-4 rounded-xl border border-slate-800 bg-[#0d1424] space-y-1">
+                  <span className="text-[10px] text-rose-400 font-bold uppercase">Failure Test Card</span>
+                  <p className="font-mono text-sm font-bold text-white">4000 0000 0000 0002</p>
+                  <p className="text-[11px] text-slate-400">Simulates Bank Decline</p>
+                </div>
+                <div className="p-4 rounded-xl border border-slate-800 bg-[#0d1424] space-y-1">
+                  <span className="text-[10px] text-emerald-400 font-bold uppercase">Simulated UPI</span>
+                  <p className="font-mono text-sm font-bold text-white">success@upi</p>
+                  <p className="text-[11px] text-slate-400">Instant UPI Approval</p>
                 </div>
               </div>
             </div>
-          </div>
-        )}
-      </main>
+          )}
+
+          {/* =============================================================== */}
+          {/* 14. AI PROMPT TOOLS */}
+          {/* =============================================================== */}
+          {(activeSection === "ai-prompt-react" || activeSection === "ai-prompt-nextjs") && (
+            <div className="space-y-6 animate-in fade-in duration-200">
+              <div className="space-y-1 border-b border-slate-800 pb-4">
+                <div className="flex items-center gap-2 text-xs text-blue-400 font-semibold uppercase tracking-wider">
+                  <span>AI Tools</span>
+                  <ChevronRight className="w-3 h-3 text-slate-600" />
+                  <span>Auto-Integration Prompts</span>
+                </div>
+                <h2 className="text-2xl font-extrabold text-white">One-Shot AI Coding Assistant Prompts</h2>
+                <p className="text-xs text-slate-400">
+                  Copy and paste directly into Cursor, Antigravity, Copilot, or Claude Code.
+                </p>
+              </div>
+
+              <CodeBlock
+                title="One-Shot React Auto-Integration Prompt"
+                code={REACT_AI_AGENT_PROMPT}
+              />
+
+              <CodeBlock
+                title="One-Shot Next.js Auto-Integration Prompt"
+                code={NEXTJS_AI_AGENT_PROMPT}
+              />
+            </div>
+          )}
+        </main>
+      </div>
     </div>
   );
 }
