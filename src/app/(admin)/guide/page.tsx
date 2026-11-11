@@ -425,7 +425,7 @@ const NAV_CATEGORIES: NavCategory[] = [
       { id: "react", title: "Pure React (Zero Backend)", badge: "Popular" },
       { id: "nextjs", title: "Next.js App Router" },
       { id: "universal-sdk", title: "Universal Client SDK" },
-      { id: "modal-hook", title: "Drop-in Modal & Hooks" },
+      // { id: "modal-hook", title: "Drop-in Modal & Hooks" },
     ],
   },
   {
@@ -433,9 +433,9 @@ const NAV_CATEGORIES: NavCategory[] = [
     icon: Database,
     items: [
       { id: "db-sync-overview", title: "Database Sync Overview" },
-      { id: "postgres-schema", title: "PostgreSQL & Supabase" },
+      // { id: "postgres-schema", title: "PostgreSQL & Supabase" },
       { id: "mysql-schema", title: "MySQL 8.0+ Schema" },
-      { id: "webhooks", title: "Signed Webhooks & Handlers" },
+      // { id: "webhooks", title: "Signed Webhooks & Handlers" },
       { id: "edge-worker", title: "Edge Functions & Workers" },
     ],
   },
@@ -445,7 +445,7 @@ const NAV_CATEGORIES: NavCategory[] = [
     items: [
       { id: "plans-setup", title: "Plans & Pricing Setup" },
       { id: "entitlements", title: "Entitlement Checks (/check)" },
-      { id: "expiration", title: "Automated Expiration" },
+      // { id: "expiration", title: "Automated Expiration" },
     ],
   },
   {
@@ -453,8 +453,8 @@ const NAV_CATEGORIES: NavCategory[] = [
     icon: Lock,
     items: [
       { id: "api-reference", title: "REST API Reference", badge: "v1" },
-      { id: "signature-verification", title: "Signature Verification (HMAC)" },
-      { id: "error-codes", title: "Error Codes & Rate Limits" },
+      // { id: "signature-verification", title: "Signature Verification (HMAC)" },
+      // { id: "error-codes", title: "Error Codes & Rate Limits" },
     ],
   },
   {
@@ -462,16 +462,16 @@ const NAV_CATEGORIES: NavCategory[] = [
     icon: Cpu,
     items: [
       { id: "sandbox-testing", title: "Cashfree Sandbox & Cards" },
-      { id: "simulation-script", title: "Automated Simulator Script" },
-      { id: "go-live", title: "Go-Live Production Checklist" },
+      // { id: "simulation-script", title: "Automated Simulator Script" },
+      // { id: "go-live", title: "Go-Live Production Checklist" },
     ],
   },
   {
     title: "AI Tools",
     icon: Bot,
     items: [
-      { id: "ai-prompt-react", title: "React AI Auto-Prompt" },
-      { id: "ai-prompt-nextjs", title: "Next.js AI Auto-Prompt" },
+      { id: "ai-prompt-react", title: "AI Auto-Prompt" },
+      // { id: "ai-prompt-nextjs", title: "Next.js AI Auto-Prompt" },
     ],
   },
 ];

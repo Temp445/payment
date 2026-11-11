@@ -22,7 +22,7 @@ const navItems = [
   { label: "Overview", href: "/", icon: LayoutDashboard },
   { label: "Integration Guides", href: "/guide", icon: BookOpen },
   { label: "Applications", href: "/apps", icon: Layers },
-  { label: "Subscriptions", href: "/subscriptions", icon: Sparkles },
+  { label: "Subscriptions Hub", href: "/subscriptions", icon: Sparkles },
   { label: "Orders & Payments", href: "/orders", icon: ShoppingBag },
   { label: "Refunds", href: "/refunds", icon: RotateCcw },
   { label: "Reconciliation", href: "/reconciliation", icon: Scale },
