@@ -408,6 +408,227 @@ interface NavCategory {
   items: NavItem[];
 }
 
+
+const SUPABASE_EDGE_FUNCTION_CODE = `/**
+ * Supabase Edge Function: payment-hub-webhook
+ * Receives signed webhooks from Central Payment Hub and inserts into app_payment_transactions.
+ * File location: supabase/functions/payment-hub-webhook/index.ts
+ *
+ * Deploy with:
+ * supabase functions deploy payment-hub-webhook --no-verify-jwt
+ * supabase secrets set PAYMENT_HUB_WEBHOOK_SECRET="your_webhook_secret_here"
+ */
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createHmac } from "https://deno.land/std@0.168.0/node/crypto.ts";
+
+serve(async (req) => {
+  try {
+    const rawBody = await req.text();
+    const signature = req.headers.get("x-hub-signature");
+    const secret = Deno.env.get("PAYMENT_HUB_WEBHOOK_SECRET");
+
+    if (!secret) {
+      console.error("Missing PAYMENT_HUB_WEBHOOK_SECRET environment secret");
+      return new Response(JSON.stringify({ error: "Missing webhook secret" }), { status: 500 });
+    }
+
+    // 1. Verify HMAC-SHA256 signature from Central Payment Hub
+    const expectedSig = createHmac("sha256", secret).update(rawBody).digest("hex");
+    if (signature !== expectedSig) {
+      console.error("Invalid signature detected");
+      return new Response(JSON.stringify({ error: "Invalid webhook signature" }), { status: 401 });
+    }
+
+    const payload = JSON.parse(rawBody);
+
+    // 2. Process PAYMENT.SUCCESS events
+    if (payload.event_type === "PAYMENT.SUCCESS") {
+      // Connect to Supabase using the service_role key (bypasses RLS for system inserts)
+      const supabase = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+      );
+
+      // 3. Insert into the payment audit ledger
+      // The Postgres trigger 'trg_activate_tenant_license' will automatically activate the license!
+      const { error } = await supabase.from("app_payment_transactions").insert({
+        order_id: payload.order_id,
+        cf_payment_id: payload.payment_id,
+        organization_id: payload.metadata?.organization_id || "DEFAULT_ORG",
+        user_id: payload.metadata?.user_id || null,
+        amount: payload.amount,
+        currency: payload.currency || "INR",
+        tier: payload.metadata?.tier || "PRO",
+        billing_period: Number(payload.metadata?.billing_period || 1),
+        period_type: payload.metadata?.period_type || "month",
+        features: payload.metadata?.features || [],
+        status: "PAID",
+        raw_payload: payload,
+      });
+
+      if (error) {
+        console.error("Supabase insertion error:", error);
+        return new Response(JSON.stringify({ error: error.message }), { status: 500 });
+      }
+    }
+
+    return new Response(JSON.stringify({ received: true }), {
+      headers: { "Content-Type": "application/json" },
+      status: 200,
+    });
+  } catch (err: any) {
+    console.error("Edge function unhandled error:", err);
+    return new Response(JSON.stringify({ error: err.message }), { status: 500 });
+  }
+});`;
+
+const SUPABASE_REALTIME_HOOK_CODE = `/**
+ * React Realtime Subscription Hook
+ * File location: src/hooks/useSubscription.ts
+ *
+ * Listens to postgres_changes on 'app_subscriptions'.
+ * When Payment Hub's webhook is processed by the Edge Function,
+ * the UI automatically unlocks PRO features in real-time with zero page refresh!
+ */
+import { useEffect, useState } from "react";
+import { createClient } from "@supabase/supabase-js";
+
+const supabase = createClient(
+  import.meta.env.VITE_SUPABASE_URL,
+  import.meta.env.VITE_SUPABASE_ANON_KEY
+);
+
+export function useSubscription(organizationId: string) {
+  const [subscription, setSubscription] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!organizationId) return;
+
+    // 1. Initial Fetch of current organization plan
+    supabase
+      .from("app_subscriptions")
+      .select("*")
+      .eq("organization_id", organizationId)
+      .maybeSingle()
+      .then(({ data }) => {
+        setSubscription(data);
+        setLoading(false);
+      });
+
+    // 2. Realtime WebSocket: Updates instantly when webhook triggers license activation!
+    const channel = supabase
+      .channel(\`sub_\${organizationId}\`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "app_subscriptions",
+          filter: \`organization_id=eq.\${organizationId}\`,
+        },
+        (payload) => {
+          console.log("[Supabase Realtime] License activated/updated:", payload.new);
+          setSubscription(payload.new);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [organizationId]);
+
+  return { subscription, loading };
+}`;
+
+const NEXTJS_WEBHOOK_ROUTE_CODE = `/**
+ * Next.js Webhook Receiver (App Router)
+ * File location: app/api/webhooks/payment-hub/route.ts
+ *
+ * Receives signed PAYMENT.SUCCESS events from Central Payment Hub.
+ * Verifies HMAC-SHA256 signature and records into the database.
+ */
+import { NextRequest, NextResponse } from "next/server";
+import crypto from "crypto";
+
+export async function POST(req: NextRequest) {
+  try {
+    const rawBody = await req.text();
+    const signature = req.headers.get("x-hub-signature");
+    const secret = process.env.PAYMENT_HUB_WEBHOOK_SECRET;
+
+    if (!secret) {
+      return NextResponse.json({ error: "Missing PAYMENT_HUB_WEBHOOK_SECRET" }, { status: 500 });
+    }
+
+    // 1. Verify HMAC-SHA256 signature
+    const expectedSignature = crypto
+      .createHmac("sha256", secret)
+      .update(rawBody)
+      .digest("hex");
+
+    if (signature !== expectedSignature) {
+      return NextResponse.json({ error: "Invalid webhook signature" }, { status: 401 });
+    }
+
+    const payload = JSON.parse(rawBody);
+
+    if (payload.event_type === "PAYMENT.SUCCESS") {
+      // 2. Insert into your database (e.g., Prisma, Drizzle, or raw SQL)
+      // The Postgres trigger 'trg_activate_tenant_license' will automatically activate the license!
+      console.log("[Next.js Webhook] Payment verified for order:", payload.order_id);
+
+      // Example SQL query:
+      // await db.query(
+      //   \`INSERT INTO app_payment_transactions (order_id, cf_payment_id, organization_id, amount, tier, billing_period, period_type)
+      //    VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (order_id) DO NOTHING\`,
+      //   [payload.order_id, payload.payment_id, payload.metadata.organization_id, payload.amount, payload.metadata.tier, payload.metadata.billing_period, payload.metadata.period_type]
+      // );
+    }
+
+    return NextResponse.json({ received: true });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}`;
+
+const NEXTJS_MIDDLEWARE_CODE = `/**
+ * Next.js Middleware / Route Guard
+ * File location: middleware.ts
+ *
+ * Protects premium routes by checking license validity.
+ */
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+
+export async function middleware(req: NextRequest) {
+  const orgId = req.cookies.get("organization_id")?.value;
+
+  if (orgId && req.nextUrl.pathname.startsWith("/pro-feature")) {
+    try {
+      const res = await fetch(\`\${process.env.PAYMENT_HUB_URL}/subscriptions/check?org_id=\${orgId}\`, {
+        headers: { "x-client-id": process.env.PAYMENT_HUB_CLIENT_ID! },
+        cache: "no-store",
+      });
+      const sub = await res.json();
+
+      if (!sub.has_active_subscription) {
+        return NextResponse.redirect(new URL("/billing/upgrade", req.url));
+      }
+    } catch (e) {
+      console.error("License check failed", e);
+    }
+  }
+
+  return NextResponse.next();
+}
+
+export const config = {
+  matcher: ["/pro-feature/:path*"],
+};`;
+
 const NAV_CATEGORIES: NavCategory[] = [
   {
     title: "Getting Started",
@@ -419,13 +640,13 @@ const NAV_CATEGORIES: NavCategory[] = [
     ],
   },
   {
-    title: "Web Integration",
+    title: "Framework Guides",
     icon: Globe,
     items: [
-      { id: "react", title: "Pure React (Zero Backend)", badge: "Popular" },
-      { id: "nextjs", title: "Next.js App Router" },
+      { id: "react-supabase", title: "React + Supabase", badge: "Full Flow" },
+      { id: "nextjs", title: "Next.js App Router", badge: "Full-Stack" },
+      { id: "react", title: "Pure React (Zero Backend)", badge: "Client Only" },
       { id: "universal-sdk", title: "Universal Client SDK" },
-      // { id: "modal-hook", title: "Drop-in Modal & Hooks" },
     ],
   },
   {
@@ -433,9 +654,8 @@ const NAV_CATEGORIES: NavCategory[] = [
     icon: Database,
     items: [
       { id: "db-sync-overview", title: "Database Sync Overview" },
-      // { id: "postgres-schema", title: "PostgreSQL & Supabase" },
+      { id: "postgres-schema", title: "PostgreSQL & Supabase DDL", badge: "Trigger" },
       { id: "mysql-schema", title: "MySQL 8.0+ Schema" },
-      // { id: "webhooks", title: "Signed Webhooks & Handlers" },
       { id: "edge-worker", title: "Edge Functions & Workers" },
     ],
   },
@@ -443,9 +663,7 @@ const NAV_CATEGORIES: NavCategory[] = [
     title: "Subscriptions & Licensing",
     icon: Sliders,
     items: [
-      { id: "plans-setup", title: "Plans & Pricing Setup" },
       { id: "entitlements", title: "Entitlement Checks (/check)" },
-      // { id: "expiration", title: "Automated Expiration" },
     ],
   },
   {
@@ -453,8 +671,6 @@ const NAV_CATEGORIES: NavCategory[] = [
     icon: Lock,
     items: [
       { id: "api-reference", title: "REST API Reference", badge: "v1" },
-      // { id: "signature-verification", title: "Signature Verification (HMAC)" },
-      // { id: "error-codes", title: "Error Codes & Rate Limits" },
     ],
   },
   {
@@ -462,16 +678,14 @@ const NAV_CATEGORIES: NavCategory[] = [
     icon: Cpu,
     items: [
       { id: "sandbox-testing", title: "Cashfree Sandbox & Cards" },
-      // { id: "simulation-script", title: "Automated Simulator Script" },
-      // { id: "go-live", title: "Go-Live Production Checklist" },
     ],
   },
   {
     title: "AI Tools",
     icon: Bot,
     items: [
-      { id: "ai-prompt-react", title: "AI Auto-Prompt" },
-      // { id: "ai-prompt-nextjs", title: "Next.js AI Auto-Prompt" },
+      { id: "ai-prompt-react", title: "React + Supabase AI Prompt" },
+      { id: "ai-prompt-nextjs", title: "Next.js AI Prompt" },
     ],
   },
 ];
@@ -484,7 +698,8 @@ export default function GuidePage() {
   const [activeSection, setActiveSection] = useState<string>("overview");
   const [searchQuery, setSearchQuery] = useState("");
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
-  const [nextjsSubTab, setNextjsSubTab] = useState<"client" | "fullstack">("client");
+  const [reactSubTab, setReactSubTab] = useState<"supabase" | "pure">("supabase");
+  const [nextjsSubTab, setNextjsSubTab] = useState<"fullstack" | "client">("fullstack");
 
   const toggleCategory = (catTitle: string) => {
     setCollapsedCategories((prev) => ({
@@ -666,7 +881,7 @@ export default function GuidePage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 {/* CARD 1: No-Code & Low-Code Solutions (Client-Only) */}
                 <div
-                  onClick={() => setActiveSection("react")}
+                  onClick={() => setActiveSection("react-supabase")}
                   className="group p-5 rounded-2xl border border-slate-800 bg-[#0d1424] hover:border-blue-500/50 hover:bg-[#111a30] transition cursor-pointer shadow-lg space-y-4 flex flex-col justify-between"
                 >
                   <div className="space-y-4">
@@ -705,7 +920,7 @@ export default function GuidePage() {
                   </div>
 
                   <span className="text-xs font-semibold text-blue-400 flex items-center gap-1">
-                    Explore Pure React Guide <ArrowRight className="w-3 h-3" />
+                    Explore React + Supabase Guide <ArrowRight className="w-3 h-3" />
                   </span>
                 </div>
 
@@ -1019,6 +1234,326 @@ export default function GuidePage() {
           {/* =============================================================== */}
           {/* 4. PURE REACT (ZERO BACKEND) */}
           {/* =============================================================== */}
+          
+          {/* =============================================================== */}
+          {/* 4. REACT + SUPABASE FULL-STACK INTEGRATION */}
+          {/* =============================================================== */}
+          {activeSection === "react-supabase" && (
+            <div className="space-y-6 animate-in fade-in duration-200">
+              <div className="space-y-1 border-b border-slate-800 pb-4">
+                <div className="flex items-center gap-2 text-xs text-blue-400 font-semibold uppercase tracking-wider">
+                  <span>Framework Guides</span>
+                  <ChevronRight className="w-3 h-3 text-slate-600" />
+                  <span>React + Supabase</span>
+                </div>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div>
+                    <h2 className="text-2xl font-extrabold text-white">React + Supabase Integration Guide</h2>
+                    <p className="text-xs text-slate-400">
+                      Production architecture combining React frontend, Supabase Edge Functions for webhooks, and automated PostgreSQL database triggers.
+                    </p>
+                  </div>
+                  <div className="bg-slate-900 p-1 rounded-xl border border-slate-800 flex gap-1 shrink-0">
+                    <button
+                      onClick={() => setReactSubTab("supabase")}
+                      className={`px-3 py-1 rounded-lg text-xs font-semibold transition ${
+                        reactSubTab === "supabase" ? "bg-blue-600 text-white" : "text-slate-400 hover:text-slate-200"
+                      }`}
+                    >
+                      Full Supabase Sync (Recommended)
+                    </button>
+                    <button
+                      onClick={() => setReactSubTab("pure")}
+                      className={`px-3 py-1 rounded-lg text-xs font-semibold transition ${
+                        reactSubTab === "pure" ? "bg-cyan-600 text-white" : "text-slate-400 hover:text-slate-200"
+                      }`}
+                    >
+                      Zero-Backend (Pure React)
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {reactSubTab === "supabase" ? (
+                <div className="space-y-6">
+                  {/* Resiliency Callout Banner */}
+                  <div className="p-4 rounded-xl border border-emerald-500/30 bg-emerald-950/20 flex items-start gap-3">
+                    <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+                    <div className="text-xs text-slate-300 leading-relaxed">
+                      <span className="font-bold text-emerald-300">Offline Resilience Guarantee:</span> In this architecture, payment transactions are forwarded to your Supabase Edge Function and written directly into your database. If Payment Hub ever experiences downtime, <strong className="text-white">your React application remains 100% operational</strong> because all entitlement checks query your local Supabase database.
+                    </div>
+                  </div>
+
+                  {/* Flow Diagram */}
+                  <div className="p-4 rounded-xl border border-slate-800 bg-[#0c1220] space-y-2">
+                    <div className="text-xs font-bold text-slate-200">End-to-End Data Flow</div>
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
+                      <div className="p-3 rounded-lg bg-slate-900/90 border border-slate-800">
+                        <div className="font-bold text-blue-400">1. Checkout Modal</div>
+                        <div className="text-[11px] text-slate-400 mt-1">User pays in Cashfree modal via React hook</div>
+                      </div>
+                      <div className="p-3 rounded-lg bg-slate-900/90 border border-slate-800">
+                        <div className="font-bold text-purple-400">2. Signed Webhook</div>
+                        <div className="text-[11px] text-slate-400 mt-1">Payment Hub sends HMAC POST to Supabase Edge Function</div>
+                      </div>
+                      <div className="p-3 rounded-lg bg-slate-900/90 border border-slate-800">
+                        <div className="font-bold text-cyan-400">3. DB Trigger</div>
+                        <div className="text-[11px] text-slate-400 mt-1">Postgres trigger auto-computes expiry and activates license</div>
+                      </div>
+                      <div className="p-3 rounded-lg bg-slate-900/90 border border-slate-800">
+                        <div className="font-bold text-emerald-400">4. Supabase Realtime</div>
+                        <div className="text-[11px] text-slate-400 mt-1">React UI unlocks PRO plan instantly with zero page reload</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Step 1: Install packages */}
+                  <div className="space-y-2">
+                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                      <span className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs">1</span>
+                      Install Required NPM Packages
+                    </h3>
+                    <CodeBlock
+                      title="Terminal Command"
+                      language="bash"
+                      code="npm install @cashfreepayments/cashfree-js @supabase/supabase-js"
+                    />
+                  </div>
+
+                  {/* Step 2: Supabase DDL */}
+                  <div className="space-y-2">
+                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                      <span className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs">2</span>
+                      Execute DDL Schema & Trigger in Supabase SQL Editor
+                    </h3>
+                    <p className="text-xs text-slate-400">
+                      Run this script in your Supabase dashboard (SQL Editor). It creates the payment ledger table and the auto-activation trigger function.
+                    </p>
+                    <CodeBlock
+                      title="Supabase PostgreSQL Schema & Trigger DDL"
+                      language="sql"
+                      filePath="supabase/migrations/tenant_subscriptions.sql"
+                      code={PG_SYNC_DDL}
+                    />
+                  </div>
+
+                  {/* Step 3: Edge Function */}
+                  <div className="space-y-2">
+                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                      <span className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs">3</span>
+                      Deploy Supabase Edge Function (Webhook Receiver)
+                    </h3>
+                    <p className="text-xs text-slate-400">
+                      Create file <code className="text-cyan-400">supabase/functions/payment-hub-webhook/index.ts</code> to receive signed events:
+                    </p>
+                    <CodeBlock
+                      title="Supabase Edge Function (Webhook Handler)"
+                      language="typescript"
+                      filePath="supabase/functions/payment-hub-webhook/index.ts"
+                      code={SUPABASE_EDGE_FUNCTION_CODE}
+                    />
+                    <div className="p-3 rounded-lg bg-slate-900 border border-slate-800 font-mono text-xs text-slate-300">
+                      <div className="text-slate-400 text-[11px] mb-1 font-sans">Deploy via Supabase CLI:</div>
+                      <div>supabase functions deploy payment-hub-webhook --no-verify-jwt</div>
+                      <div>supabase secrets set PAYMENT_HUB_WEBHOOK_SECRET="&lt;YOUR_WEBHOOK_SECRET&gt;"</div>
+                    </div>
+                  </div>
+
+                  {/* Step 4: Webhook Destination URL in Payment Hub */}
+                  <div className="space-y-2">
+                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                      <span className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs">4</span>
+                      Configure Webhook Destination URL in Payment Hub
+                    </h3>
+                    <p className="text-xs text-slate-400">
+                      Navigate to <Link href="/apps" className="text-blue-400 hover:underline">Apps Registry</Link>, edit your application, and set your Webhook URL:
+                    </p>
+                    <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 font-mono text-xs text-cyan-300">
+                      https://&lt;your-project-ref&gt;.supabase.co/functions/v1/payment-hub-webhook
+                    </div>
+                  </div>
+
+                  {/* Step 5: React Client Hook */}
+                  <div className="space-y-2">
+                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                      <span className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs">5</span>
+                      Create React Payment Hook (usePaymentHub)
+                    </h3>
+                    <CodeBlock
+                      title="React Payment Hook"
+                      filePath="src/hooks/usePaymentHub.ts"
+                      code={`"use client";
+
+import { useState } from "react";
+import { load } from "@cashfreepayments/cashfree-js";
+
+export function usePaymentHub() {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const pay = async (params: {
+    amount: number;
+    customerPhone: string;
+    customerName?: string;
+    customerEmail?: string;
+    orderNote?: string;
+    metadata?: Record<string, any>;
+    onSuccess?: (paymentId: string) => void;
+    onFailure?: (err: string) => void;
+  }) => {
+    setLoading(true);
+    setError(null);
+
+    const hubUrl = import.meta.env.VITE_PAYMENT_HUB_URL || "http://localhost:3001/api/v1";
+    const clientId = import.meta.env.VITE_PAYMENT_HUB_CLIENT_ID;
+
+    try {
+      // 1. Create Order in Central Payment Hub
+      const res = await fetch(\`\${hubUrl}/orders\`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-client-id": clientId },
+        body: JSON.stringify({
+          order_id: \`ORD_\${Date.now()}\`,
+          order_amount: params.amount,
+          customer_details: {
+            customer_id: \`CUST_\${params.customerPhone}\`,
+            customer_phone: params.customerPhone,
+            customer_name: params.customerName || "Customer",
+            customer_email: params.customerEmail,
+          },
+          order_note: params.orderNote,
+          metadata: params.metadata || {},
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.payment_session_id) {
+        throw new Error(data.error || "Order creation failed");
+      }
+
+      // 2. Mount Cashfree Drop-in Modal
+      const cashfree = await load({ mode: "sandbox" });
+      const result = await cashfree.checkout({
+        paymentSessionId: data.payment_session_id,
+        redirectTarget: "_modal",
+      });
+
+      if (result.error) {
+        setError(result.error.message || "Payment cancelled");
+        if (params.onFailure) params.onFailure(result.error.message);
+        return;
+      }
+
+      if (params.onSuccess) params.onSuccess(data.order_id);
+    } catch (err: any) {
+      setError(err.message || "Payment failed");
+      if (params.onFailure) params.onFailure(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return { pay, loading, error };
+}`}
+                    />
+                  </div>
+
+                  {/* Step 6: Supabase Realtime Hook */}
+                  <div className="space-y-2">
+                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                      <span className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs">6</span>
+                      React Realtime Subscription Hook (useSubscription)
+                    </h3>
+                    <p className="text-xs text-slate-400">
+                      Listens directly to your Supabase <code className="text-blue-400">app_subscriptions</code> table so the UI unlocks immediately upon payment:
+                    </p>
+                    <CodeBlock
+                      title="Supabase Realtime Hook"
+                      filePath="src/hooks/useSubscription.ts"
+                      code={SUPABASE_REALTIME_HOOK_CODE}
+                    />
+                  </div>
+
+                  {/* Step 7: UI Button */}
+                  <div className="space-y-2">
+                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                      <span className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs">7</span>
+                      Upgrade / Pay Button Component
+                    </h3>
+                    <CodeBlock
+                      title="Checkout Button Component"
+                      filePath="src/components/CheckoutButton.tsx"
+                      code={`import React from "react";
+import { usePaymentHub } from "@/hooks/usePaymentHub";
+
+export function CheckoutButton({ organizationId = "org_123", amount = 5000 }: { organizationId?: string; amount?: number }) {
+  const { pay, loading, error } = usePaymentHub();
+
+  const handleCheckout = () => {
+    pay({
+      amount,
+      customerPhone: "9876543210",
+      customerName: "Organization Admin",
+      customerEmail: "admin@example.com",
+      orderNote: "Annual Pro Subscription",
+      metadata: {
+        organization_id: organizationId,
+        tier: "PRO",
+        billing_period: 1,
+        period_type: "year",
+      },
+      onSuccess: () => alert("Payment complete! Your subscription is now active."),
+      onFailure: (err) => alert("Payment failed: " + err),
+    });
+  };
+
+  return (
+    <div>
+      <button
+        onClick={handleCheckout}
+        disabled={loading}
+        className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs transition shadow-md"
+      >
+        {loading ? "Opening Checkout..." : \`Upgrade to Pro (₹\${amount})\`}
+      </button>
+      {error && <p className="text-xs text-rose-400 mt-2">{error}</p>}
+    </div>
+  );
+}`}
+                    />
+                  </div>
+                </div>
+              ) : (
+                /* Pure React Zero Backend Subtab */
+                <div className="space-y-4">
+                  <div className="p-4 rounded-xl border border-blue-500/30 bg-blue-950/20 text-xs text-slate-300">
+                    <strong className="text-white">Zero-Backend Mode:</strong> Connect your React SPA without setting up Supabase Edge Functions. The React SDK queries Payment Hub's <code className="text-blue-400">/check</code> endpoint directly on demand.
+                  </div>
+                  <CodeBlock
+                    title="1. Configure React Environment (.env)"
+                    filePath=".env"
+                    code={`# Central Payment Hub Client Configuration\nVITE_PAYMENT_HUB_URL="http://localhost:3001/api/v1"\nVITE_PAYMENT_HUB_CLIENT_ID="<YOUR_PUBLIC_CLIENT_ID>"`}
+                  />
+                  <CodeBlock
+                    title="2. Check License from React using Universal SDK"
+                    filePath="src/lib/checkAccess.ts"
+                    code={`import { PaymentHubClient } from "@/lib/paymentHubClient";
+
+const client = new PaymentHubClient({
+  hubUrl: import.meta.env.VITE_PAYMENT_HUB_URL,
+  clientId: import.meta.env.VITE_PAYMENT_HUB_CLIENT_ID,
+});
+
+export async function hasProAccess(orgId: string): Promise<boolean> {
+  const license = await client.checkSubscription(orgId);
+  return license.has_active_subscription && license.tier === "PRO";
+}`}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
           {activeSection === "react" && (
             <div className="space-y-6 animate-in fade-in duration-200">
               <div className="space-y-1 border-b border-slate-800 pb-4">
@@ -1184,7 +1719,7 @@ export function CheckoutButton({ amount = 5000 }: { amount?: number }) {
                 </div>
               </div>
 
-              {nextjsSubTab === "client" ? (
+                            {nextjsSubTab === "client" ? (
                 <div className="space-y-4">
                   <CodeBlock
                     title="1. Next.js .env.local (Only 2 Public Variables)"
@@ -1210,6 +1745,7 @@ export function usePaymentHub() {
     customerName?: string;
     customerEmail?: string;
     orderNote?: string;
+    metadata?: Record<string, any>;
     onSuccess?: (paymentId: string) => void;
     onFailure?: (err: string) => void;
   }) => {
@@ -1223,7 +1759,18 @@ export function usePaymentHub() {
       const res = await fetch(\`\${hubUrl}/orders\`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-client-id": clientId! },
-        body: JSON.stringify(params),
+        body: JSON.stringify({
+          order_id: \`ORD_\${Date.now()}\`,
+          order_amount: params.amount,
+          customer_details: {
+            customer_id: \`CUST_\${params.customerPhone}\`,
+            customer_phone: params.customerPhone,
+            customer_name: params.customerName,
+            customer_email: params.customerEmail,
+          },
+          order_note: params.orderNote,
+          metadata: params.metadata || {},
+        }),
       });
       const data = await res.json();
       if (!res.ok || !data.payment_session_id) throw new Error(data.error || "Order creation failed");
@@ -1235,8 +1782,8 @@ export function usePaymentHub() {
       });
 
       if (result.error) {
-        setError(result.error.message || "Payment aborted");
-        if (params.onFailure) params.onFailure(result.error.message || "Payment aborted");
+        setError(result.error.message || "Payment cancelled");
+        if (params.onFailure) params.onFailure(result.error.message);
         return;
       }
 
@@ -1254,11 +1801,28 @@ export function usePaymentHub() {
                   />
                 </div>
               ) : (
-                <div className="space-y-4">
-                  <CodeBlock
-                    title="1. Next.js Server Route (app/api/create-order/route.ts)"
-                    filePath="app/api/create-order/route.ts"
-                    code={`import { NextResponse } from "next/server";
+                <div className="space-y-6">
+                  <div className="space-y-2">
+                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                      <span className="w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xs">1</span>
+                      Environment Variables (.env.local)
+                    </h3>
+                    <CodeBlock
+                      title="Next.js Full-Stack Environment"
+                      filePath=".env.local"
+                      code={`# Client-accessible URL\nNEXT_PUBLIC_PAYMENT_HUB_URL="http://localhost:3001/api/v1"\n\n# Server-only credentials (Never exposed to browser)\nPAYMENT_HUB_CLIENT_ID="pub_live_nextapp_xxxx"\nPAYMENT_HUB_CLIENT_SECRET="sec_live_nextapp_xxxx"\nPAYMENT_HUB_WEBHOOK_SECRET="whsec_nextapp_xxxx"`}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                      <span className="w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xs">2</span>
+                      Server API Route for Secure Order Creation
+                    </h3>
+                    <CodeBlock
+                      title="Order Creation Server Route"
+                      filePath="app/api/create-order/route.ts"
+                      code={`import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
   const body = await req.json();
@@ -1270,13 +1834,49 @@ export async function POST(req: Request) {
       "x-client-id": process.env.PAYMENT_HUB_CLIENT_ID!,
       "x-client-secret": process.env.PAYMENT_HUB_CLIENT_SECRET!,
     },
-    body: JSON.stringify(body),
+    body: JSON.stringify({
+      order_id: \`ORD_\${Date.now()}\`,
+      order_amount: body.amount,
+      customer_details: body.customer,
+      metadata: body.metadata || {},
+    }),
   });
 
   const data = await hubRes.json();
   return NextResponse.json(data, { status: hubRes.status });
 }`}
-                  />
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                      <span className="w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xs">3</span>
+                      Next.js Webhook Receiver (HMAC-SHA256 Verification)
+                    </h3>
+                    <p className="text-xs text-slate-400">
+                      Receives signed webhook notifications from Payment Hub Outbox and updates the local database:
+                    </p>
+                    <CodeBlock
+                      title="Next.js Signed Webhook Handler"
+                      filePath="app/api/webhooks/payment-hub/route.ts"
+                      code={NEXTJS_WEBHOOK_ROUTE_CODE}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                      <span className="w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xs">4</span>
+                      Middleware / Route Guard License Check
+                    </h3>
+                    <p className="text-xs text-slate-400">
+                      Protects dashboard pages and redirects unlicensed users to the upgrade screen:
+                    </p>
+                    <CodeBlock
+                      title="Next.js Middleware License Guard"
+                      filePath="middleware.ts"
+                      code={NEXTJS_MIDDLEWARE_CODE}
+                    />
+                  </div>
                 </div>
               )}
             </div>
@@ -1384,42 +1984,7 @@ export async function POST(req: Request) {
             </div>
           )}
 
-          {/* =============================================================== */}
-          {/* 10. PLANS & PRICING SETUP */}
-          {/* =============================================================== */}
-          {activeSection === "plans-setup" && (
-            <div className="space-y-6 animate-in fade-in duration-200">
-              <div className="space-y-1 border-b border-slate-800 pb-4">
-                <div className="flex items-center gap-2 text-xs text-blue-400 font-semibold uppercase tracking-wider">
-                  <span>Subscriptions & Licensing</span>
-                  <ChevronRight className="w-3 h-3 text-slate-600" />
-                  <span>Plans Setup</span>
-                </div>
-                <h2 className="text-2xl font-extrabold text-white">Configuring Products & Pricing Tiers</h2>
-                <p className="text-xs text-slate-400">
-                  How products and pricing tiers are structured and automatically linked to target applications.
-                </p>
-              </div>
-
-              <div className="p-5 rounded-xl border border-slate-800 bg-[#0d1424] space-y-4">
-                <h3 className="font-bold text-sm text-white">Key Product Identity Rules</h3>
-                <ul className="text-xs text-slate-300 space-y-2 list-disc list-inside leading-relaxed">
-                  <li><strong>Automatic Namespace Lock:</strong> Product Code is strictly derived from the selected target application's <code className="text-blue-400">appCode</code> (e.g. <code className="text-blue-400">REAL_ESTATE_CRM</code>, <code className="text-blue-400">PAYROLL</code>). Arbitrary codes or suffixes (like <code className="text-rose-400">_SAAS</code>) are not allowed.</li>
-                  <li><strong>Multiple Tiers per Product:</strong> You can add multiple pricing tiers (e.g. Starter, Professional, Enterprise) under the same application product.</li>
-                  <li><strong>Feature Flags:</strong> Provide comma-separated flags (e.g. <code className="text-emerald-400">crm_leads, whatsapp_inbox, export_pdf</code>) which are returned during entitlement verification.</li>
-                  <li><strong>Edit & Delete Controls:</strong> Edit any pricing tier directly or delete unused products from the Subscriptions management portal.</li>
-                </ul>
-
-                <Link
-                  href="/subscriptions"
-                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs transition"
-                >
-                  <span>Go to Subscriptions Management</span>
-                  <ExternalLink className="w-3.5 h-3.5" />
-                </Link>
-              </div>
-            </div>
-          )}
+          
 
           {/* =============================================================== */}
           {/* 11. ENTITLEMENTS & EXPIRATION */}
