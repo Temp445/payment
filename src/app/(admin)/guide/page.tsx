@@ -151,10 +151,10 @@ export class PaymentHubClient {
   }
 
   // 1. Check Active License & Feature Entitlements
-  async checkSubscription(orgId: string, feature?: string) {
+  async checkSubscription(orgId: string, productCode?: string) {
     const url = new URL(\`\${this.hubUrl}/subscriptions/check\`);
-    url.searchParams.set("orgId", orgId);
-    if (feature) url.searchParams.set("feature", feature);
+    url.searchParams.set("org_id", orgId);
+    if (productCode) url.searchParams.set("product_code", productCode);
 
     const res = await fetch(url.toString(), {
       headers: { "x-client-id": this.clientId }
@@ -189,11 +189,15 @@ export class PaymentHubClient {
         "x-client-id": this.clientId
       },
       body: JSON.stringify({
-        amount: params.amount,
-        customerPhone: params.customerPhone,
-        customerEmail: params.customerEmail,
-        customerName: params.customerName,
-        orderNote: params.orderNote,
+        order_id: \`ORD_\${Date.now()}\`,
+        order_amount: params.amount,
+        customer_details: {
+          customer_id: \`CUST_\${params.customerPhone}\`,
+          customer_phone: params.customerPhone,
+          customer_email: params.customerEmail,
+          customer_name: params.customerName
+        },
+        order_note: params.orderNote,
         metadata: params.metadata || {}
       })
     });
@@ -202,7 +206,7 @@ export class PaymentHubClient {
       throw new Error(orderData.error || "Order creation failed");
     }
 
-    // B. Launch Cashfree Drop-in
+    // B. Launch Cashfree Drop-in (use mode: "production" when going live)
     const cashfree = await load({ mode: "sandbox" });
     const result = await cashfree.checkout({
       paymentSessionId: orderData.payment_session_id,
@@ -397,8 +401,7 @@ const EDGE_WORKER_CODE = `/**
 import crypto from "crypto";
 
 export async function handlePaymentWebhook(req: Request, env: any) {
-  const signature = req.headers.get("x-webhook-signature") || req.headers.get("x-hub-signature");
-  const timestamp = req.headers.get("x-webhook-timestamp");
+  const signature = req.headers.get("x-hub-signature");
   const rawBody = await req.text();
 
   // 1. Verify HMAC-SHA256 Signature
@@ -2078,20 +2081,27 @@ export async function POST(req: Request) {
               <CodeBlock
                 title="Entitlement Check Endpoint (GET /api/v1/subscriptions/check)"
                 code={`// Example Request:
-GET /api/v1/subscriptions/check?orgId=ORG_ACME&feature=whatsapp_inbox HTTP/1.1
+GET /api/v1/subscriptions/check?org_id=ORG_ACME&product_code=CRM HTTP/1.1
 Host: localhost:3001
 x-client-id: pub_live_payroll_d42a8b9e...
 
+// product_code is optional (defaults to the app's first active product).
 // Example Response (200 OK):
 {
-  "hasAccess": true,
-  "isActive": true,
+  "success": true,
+  "app_code": "APP001",
+  "organization_id": "ORG_ACME",
+  "has_active_subscription": true,
+  "reason": "ACTIVE",            // ACTIVE | EXPIRED | NOT_FOUND
+  "product_code": "CRM",
+  "product_name": "CRM Suite",
   "tier": "Professional",
-  "tierLevel": 2,
-  "daysRemaining": 29,
-  "userLimit": 5,
+  "tier_level": 2,
+  "user_limit": 5,
   "features": ["crm_leads", "whatsapp_inbox", "export_pdf"],
-  "expiresAt": "2026-12-11T12:00:00.000Z"
+  "starts_on": "2026-11-11",
+  "ends_on": "2026-12-11",
+  "days_remaining": 29
 }`}
               />
             </div>
@@ -2110,7 +2120,7 @@ x-client-id: pub_live_payroll_d42a8b9e...
                 </div>
                 <h2 className="text-2xl font-extrabold text-white">Central Payment Hub REST API Reference</h2>
                 <p className="text-xs text-slate-400">
-                  All endpoints require <code className="text-blue-400">x-client-id</code> in headers.
+                  Client endpoints require <code className="text-blue-400">x-client-id</code>; listing orders also needs <code className="text-blue-400">x-client-secret</code> (server-side only). Admin endpoints (apps, settings, outbox, refunds, reconciliation, subscription management) require <code className="text-blue-400">Authorization: Bearer &lt;ADMIN_API_KEY&gt;</code>.
                 </p>
               </div>
 
