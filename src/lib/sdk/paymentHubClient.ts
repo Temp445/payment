@@ -157,6 +157,7 @@ export class PaymentHubClient {
 
       // 2. Open Cashfree modal SDK if available in window, or redirect
       if (typeof window !== "undefined") {
+        // @ts-ignore - dynamic import for browser environment
         const cashfreeModule = await import("@cashfreepayments/cashfree-js").catch(() => null);
         if (cashfreeModule && cashfreeModule.load) {
           const cashfree = await cashfreeModule.load({ mode: "sandbox" });

@@ -382,7 +382,7 @@ export class OrderService {
                   PENDING: "PENDING",
                   CANCELLED: "CANCELLED",
                 };
-                const mappedStatus = statusMap[attempt.payment_status] || "FAILED";
+                const mappedStatus = (attempt.payment_status && statusMap[attempt.payment_status]) || "FAILED";
                 const method = attempt.payment_group || "OTHER";
                 const amt = attempt.payment_amount ?? Number(order.orderAmount);
 

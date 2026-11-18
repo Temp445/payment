@@ -77,8 +77,8 @@ export async function GET(req: NextRequest) {
         WHERE a.id = p.application_id AND p.product_code LIKE '%_SAAS'
       `).catch(() => {});
 
-      const [productsRaw, subsRaw]: [any[], any[]] = await Promise.all([
-        prisma.$queryRawUnsafe(`
+      const [productsRaw, subsRaw] = (await Promise.all([
+        prisma.$queryRawUnsafe<any[]>(`
           SELECT 
             p.id,
             p.application_id as "applicationId",
@@ -112,7 +112,7 @@ export async function GET(req: NextRequest) {
           GROUP BY p.id, a."appCode", a."appName"
           ORDER BY p.created_at DESC
         `),
-        prisma.$queryRawUnsafe(`
+        prisma.$queryRawUnsafe<any[]>(`
           SELECT 
             s.id::text,
             s.organization_id,
@@ -136,7 +136,7 @@ export async function GET(req: NextRequest) {
           JOIN public.subscription_offers o ON o.id = s.offer_id
           ORDER BY s.created_at DESC
         `),
-      ]);
+      ])) as [any[], any[]];
 
       products = (productsRaw || []).map((p) => ({
         ...p,
