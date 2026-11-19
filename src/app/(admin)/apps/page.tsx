@@ -639,7 +639,7 @@ export default function ApplicationsPage() {
                         />
                         <div className="flex-1 min-w-0">
                           <p className="text-xs font-semibold text-[var(--foreground)] truncate">
-                            {editLogoUrl.startsWith("data:") ? "Uploaded Image (Base64)" : editLogoUrl}
+                            {editLogoUrl.startsWith("data:") ? "Uploaded Image" : editLogoUrl}
                           </p>
                           <p className="text-[10px] text-emerald-400 font-medium">Active on checkout card</p>
                         </div>
@@ -657,7 +657,7 @@ export default function ApplicationsPage() {
                         <label className="flex flex-col items-center justify-center p-4 rounded-lg border-2 border-dashed border-[var(--border)] hover:border-blue-500/50 bg-[var(--background)] hover:bg-slate-900/50 cursor-pointer transition">
                           <Upload className="w-5 h-5 text-blue-400 mb-1" />
                           <span className="text-xs font-semibold text-[var(--foreground)]">Upload Logo</span>
-                          <span className="text-[10px] text-[var(--muted-foreground)]">PNG, JPG, SVG, WebP (auto-converts to Base64)</span>
+                          <span className="text-[10px] text-[var(--muted-foreground)]">PNG, JPG, SVG, WebP</span>
                           <input
                             type="file"
                             accept="image/*"
