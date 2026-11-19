@@ -57,6 +57,7 @@ export class OrderService {
         order_id: existingOrder.appOrderId,
         cf_order_id: existingOrder.cfOrderId,
         payment_session_id: existingOrder.paymentSessionId,
+        checkout_url: this.checkoutUrl(hubOrigin, existingOrder.paymentSessionId),
         order_status: existingOrder.orderStatus,
         order_amount: Number(existingOrder.orderAmount),
       };
@@ -142,9 +143,16 @@ export class OrderService {
       order_id: input.order_id,
       cf_order_id: cfOrderId,
       payment_session_id: paymentSessionId,
+      checkout_url: paymentSessionId ? this.checkoutUrl(hubOrigin, paymentSessionId) : undefined,
       order_status: "ACTIVE",
       order_amount: input.order_amount,
     };
+  }
+
+  /** Branded hosted checkout URL (custom checkout page served by Payment Hub) */
+  private static checkoutUrl(hubOrigin: string | undefined, sessionId: string): string | undefined {
+    if (!hubOrigin) return undefined;
+    return `${hubOrigin.replace(/\/$/, "")}/checkout/${encodeURIComponent(sessionId)}`;
   }
 
   /**

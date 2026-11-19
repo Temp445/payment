@@ -37,8 +37,6 @@ export default function SettingsPage() {
   const [statusMsg, setStatusMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [connMsg, setConnMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
-  const authHeader = `Bearer ${process.env.NEXT_PUBLIC_ADMIN_KEY || "admin_secret_hub_master_key_change_me"}`;
-
   useEffect(() => {
     fetchSettings();
   }, []);
@@ -49,8 +47,7 @@ export default function SettingsPage() {
     setConnMsg(null);
     try {
       const res = await fetch("/api/v1/settings", {
-        headers: { Authorization: authHeader },
-      });
+        });
       const data = await res.json();
       if (data.success && data.settings) {
         setHubUrl(data.settings.hubUrl || "");
@@ -80,7 +77,6 @@ export default function SettingsPage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: authHeader,
         },
         body: JSON.stringify({
           hubUrl: hubUrl.trim(),
@@ -129,8 +125,7 @@ export default function SettingsPage() {
     setConnMsg(null);
     try {
       const res = await fetch("/api/v1/settings?test_connection=true", {
-        headers: { Authorization: authHeader },
-      });
+        });
       const data = await res.json();
       if (data.success && data.connectionStatus === "CONNECTED") {
         setConnMsg({

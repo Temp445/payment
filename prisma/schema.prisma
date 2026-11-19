@@ -44,6 +44,9 @@ model Application {
   id               String       @id @default(uuid())
   appCode          String       @unique // e.g. 'APP001', 'WEBSITE_01', 'ANDROID_STORE'
   appName          String
+  displayName      String?      // Business name shown on the branded checkout (falls back to appName)
+  logoUrl          String?      // Logo shown on the branded checkout
+  brandColor       String?      // Hex colour e.g. #166534
   clientId         String       @unique
   clientSecretHash String
   webhookUrl       String?

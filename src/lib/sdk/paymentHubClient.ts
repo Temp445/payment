@@ -59,6 +59,10 @@ export interface CheckoutParams {
   };
   onSuccess?: (paymentId: string) => void;
   onFailure?: (error: string) => void;
+  /** Where the branded Hub checkout sends the customer after payment (default: current page) */
+  returnUrl?: string;
+  /** Use Hub's branded checkout page (default true). Set false for Cashfree's own modal. */
+  branded?: boolean;
 }
 
 export class PaymentHubClient {
@@ -135,6 +139,10 @@ export class PaymentHubClient {
             customer_name: params.customer.name || "Customer",
             customer_email: params.customer.email,
           },
+          order_meta:
+            params.branded !== false && typeof window !== "undefined"
+              ? { return_url: params.returnUrl || window.location.href }
+              : undefined,
           metadata: {
             organization_id: params.organizationId,
             product_id: params.productId,
@@ -155,7 +163,13 @@ export class PaymentHubClient {
         throw new Error("Payment Hub did not return a paymentSessionId");
       }
 
-      // 2. Open Cashfree modal SDK if available in window, or redirect
+      // 2a. Branded Hub checkout (custom UI, per-app name/logo/colour)
+      if (params.branded !== false && data.checkout_url && typeof window !== "undefined") {
+        window.location.href = data.checkout_url;
+        return;
+      }
+
+      // 2b. Open Cashfree modal SDK if available in window, or redirect
       if (typeof window !== "undefined") {
         // @ts-ignore - dynamic import for browser environment
         const cashfreeModule = await import("@cashfreepayments/cashfree-js").catch(() => null);

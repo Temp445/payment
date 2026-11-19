@@ -6,6 +6,25 @@ import { z } from "zod";
 
 const updateAppSchema = z.object({
   appName: z.string().min(2).max(100).optional(),
+  displayName: z.string().trim().max(100).nullable().optional(),
+  logoUrl: z
+    .string()
+    .trim()
+    .refine(
+      (val) => !val || val.startsWith("data:image/") || /^https?:\/\//i.test(val),
+      "Logo must be an image URL or uploaded image"
+    )
+    .refine((val) => !val || val.length <= 3_000_000, "Image file must be under 2MB")
+    .nullable()
+    .optional()
+    .or(z.literal("")),
+  brandColor: z
+    .string()
+    .trim()
+    .regex(/^#[0-9a-fA-F]{6}$/, "brandColor must be a hex colour like #166534")
+    .nullable()
+    .optional()
+    .or(z.literal("")),
   webhookUrl: z.string().url().nullable().optional(),
   isActive: z.boolean().optional(),
   regenerateSecret: z.boolean().optional(),
@@ -85,6 +104,16 @@ export async function PATCH(
 
     if (appName !== undefined) {
       dataToUpdate.appName = appName;
+    }
+
+    if (validation.data.displayName !== undefined) {
+      dataToUpdate.displayName = validation.data.displayName || null;
+    }
+    if (validation.data.logoUrl !== undefined) {
+      dataToUpdate.logoUrl = validation.data.logoUrl || null;
+    }
+    if (validation.data.brandColor !== undefined) {
+      dataToUpdate.brandColor = validation.data.brandColor || null;
     }
 
     if (webhookUrl !== undefined) {

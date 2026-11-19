@@ -34,7 +34,6 @@ export function RefundsClient({ initialRefunds }: RefundsClientProps) {
           "Content-Type": "application/json",
           "x-client-id": `pub_live_${appCode.toLowerCase()}`, // or admin override
           "x-client-secret": "sec_live_admin",
-          Authorization: `Bearer ${process.env.NEXT_PUBLIC_ADMIN_KEY || "admin_secret_hub_master_key_change_me"}`,
         },
         body: JSON.stringify({
           order_id: orderId,

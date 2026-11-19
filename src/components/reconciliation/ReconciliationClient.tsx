@@ -33,7 +33,6 @@ export function ReconciliationClient({
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.NEXT_PUBLIC_ADMIN_KEY || "admin_secret_hub_master_key_change_me"}`,
         },
         body: JSON.stringify({ action: "sync" }),
       });

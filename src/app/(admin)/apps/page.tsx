@@ -19,6 +19,9 @@ import {
   RefreshCw,
   Power,
   ExternalLink,
+  Upload,
+  X,
+  Image as ImageIcon,
 } from "lucide-react";
 
 export default function ApplicationsPage() {
@@ -37,6 +40,9 @@ export default function ApplicationsPage() {
   const [editApp, setEditApp] = useState<any | null>(null);
   const [editAppName, setEditAppName] = useState("");
   const [editWebhookUrl, setEditWebhookUrl] = useState("");
+  const [editDisplayName, setEditDisplayName] = useState("");
+  const [editLogoUrl, setEditLogoUrl] = useState("");
+  const [editBrandColor, setEditBrandColor] = useState("");
   const [editIsActive, setEditIsActive] = useState(true);
   const [editRegenerateSecret, setEditRegenerateSecret] = useState(false);
   const [editRegenerateWebhookSecret, setEditRegenerateWebhookSecret] = useState(false);
@@ -49,8 +55,6 @@ export default function ApplicationsPage() {
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  const authHeader = `Bearer ${process.env.NEXT_PUBLIC_ADMIN_KEY || "admin_secret_hub_master_key_change_me"}`;
-
   useEffect(() => {
     fetchApps();
   }, []);
@@ -59,8 +63,7 @@ export default function ApplicationsPage() {
     setLoading(true);
     try {
       const res = await fetch("/api/v1/apps", {
-        headers: { Authorization: authHeader },
-      });
+        });
       const data = await res.json();
       if (data.apps) setApps(data.apps);
     } catch (err) {
@@ -77,7 +80,6 @@ export default function ApplicationsPage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: authHeader,
         },
         body: JSON.stringify({
           appCode: appCode.trim(),
@@ -105,10 +107,32 @@ export default function ApplicationsPage() {
     }
   }
 
+  function handleLogoFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      alert("Please upload a valid image file (PNG, JPG, SVG, WebP)");
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      alert("Image is larger than 2MB. Please select a smaller image for fast checkout loading.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const base64 = event.target?.result as string;
+      setEditLogoUrl(base64);
+    };
+    reader.readAsDataURL(file);
+  }
+
   function openEditModal(app: any) {
     setEditApp(app);
     setEditAppName(app.appName);
     setEditWebhookUrl(app.webhookUrl || "");
+    setEditDisplayName(app.displayName || "");
+    setEditLogoUrl(app.logoUrl || "");
+    setEditBrandColor(app.brandColor || "");
     setEditIsActive(app.isActive);
     setEditRegenerateSecret(false);
     setEditRegenerateWebhookSecret(false);
@@ -125,10 +149,12 @@ export default function ApplicationsPage() {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
-          Authorization: authHeader,
         },
         body: JSON.stringify({
           appName: editAppName,
+          displayName: editDisplayName.trim() || null,
+          logoUrl: editLogoUrl.trim() || null,
+          brandColor: editBrandColor || null,
           webhookUrl: editWebhookUrl ? editWebhookUrl.trim() : null,
           isActive: editIsActive,
           regenerateSecret: editRegenerateSecret,
@@ -168,8 +194,7 @@ export default function ApplicationsPage() {
     try {
       const res = await fetch(`/api/v1/apps/${deleteApp.id}${force ? "?force=true" : ""}`, {
         method: "DELETE",
-        headers: { Authorization: authHeader },
-      });
+        });
 
       const data = await res.json();
       if (data.success) {
@@ -191,7 +216,6 @@ export default function ApplicationsPage() {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
-          Authorization: authHeader,
         },
         body: JSON.stringify({ isActive: !app.isActive }),
       });
@@ -276,11 +300,23 @@ export default function ApplicationsPage() {
             >
               {/* Header with App Code, Status, and Action Buttons */}
               <div className="flex items-start justify-between gap-2">
-                <div>
-                  <div className="inline-block font-mono text-xs font-bold px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 mb-1">
-                    {app.appCode}
+                <div className="flex items-center gap-2.5">
+                  {app.logoUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={app.logoUrl}
+                      alt=""
+                      className="w-9 h-9 rounded-lg bg-white object-contain p-1 border border-slate-700 shadow-sm shrink-0"
+                    />
+                  ) : null}
+                  <div>
+                    <div className="inline-block font-mono text-xs font-bold px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 mb-0.5">
+                      {app.appCode}
+                    </div>
+                    <h3 className="font-bold text-sm text-[var(--foreground)] leading-tight">
+                      {app.displayName || app.appName}
+                    </h3>
                   </div>
-                  <h3 className="font-bold text-sm text-[var(--foreground)] leading-tight">{app.appName}</h3>
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
@@ -576,6 +612,82 @@ export default function ApplicationsPage() {
                   <p className="text-[10px] text-[var(--muted-foreground)] mt-1">
                     Payment Hub will dispatch signed HMAC-SHA256 events to this address when orders are paid.
                   </p>
+                </div>
+
+                {/* Checkout Branding */}
+                <div className="space-y-3 p-3 rounded-lg border border-[var(--border)]">
+                  <span className="block font-semibold text-[var(--foreground)]">Checkout Branding</span>
+                  <div>
+                    <label className="block text-[var(--muted-foreground)] mb-1 font-medium">Business Name (shown at checkout)</label>
+                    <input
+                      type="text"
+                      value={editDisplayName}
+                      onChange={(e) => setEditDisplayName(e.target.value)}
+                      placeholder={editAppName || "Ace Real Estate CRM"}
+                      className="w-full px-3 py-2 rounded-lg bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)] focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[var(--muted-foreground)] mb-1 font-medium">Business Logo</label>
+                    {editLogoUrl ? (
+                      <div className="flex items-center gap-3 p-2.5 rounded-lg bg-[var(--background)] border border-[var(--border)]">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={editLogoUrl}
+                          alt="Logo Preview"
+                          className="w-12 h-12 rounded-lg bg-white object-contain p-1 border border-slate-700 shadow-sm"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold text-[var(--foreground)] truncate">
+                            {editLogoUrl.startsWith("data:") ? "Uploaded Image (Base64)" : editLogoUrl}
+                          </p>
+                          <p className="text-[10px] text-emerald-400 font-medium">Active on checkout card</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setEditLogoUrl("")}
+                          className="p-1.5 rounded-md hover:bg-red-500/10 text-red-400 hover:text-red-300 transition"
+                          title="Remove logo"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <label className="flex flex-col items-center justify-center p-4 rounded-lg border-2 border-dashed border-[var(--border)] hover:border-blue-500/50 bg-[var(--background)] hover:bg-slate-900/50 cursor-pointer transition">
+                          <Upload className="w-5 h-5 text-blue-400 mb-1" />
+                          <span className="text-xs font-semibold text-[var(--foreground)]">Upload Logo</span>
+                          <span className="text-[10px] text-[var(--muted-foreground)]">PNG, JPG, SVG, WebP (auto-converts to Base64)</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleLogoFileChange}
+                            className="hidden"
+                          />
+                        </label>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] text-[var(--muted-foreground)]">or URL:</span>
+                          <input
+                            type="text"
+                            value={editLogoUrl}
+                            onChange={(e) => setEditLogoUrl(e.target.value)}
+                            placeholder="https://example.com/logo.png"
+                            className="flex-1 px-2.5 py-1 text-xs rounded bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)] font-mono focus:outline-none focus:border-blue-500"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <label className="text-[var(--muted-foreground)] font-medium">Brand Colour</label>
+                    <input
+                      type="color"
+                      value={editBrandColor || "#2563eb"}
+                      onChange={(e) => setEditBrandColor(e.target.value)}
+                      className="h-8 w-12 rounded border border-[var(--border)] bg-transparent"
+                    />
+                    <span className="font-mono text-[11px] text-[var(--muted-foreground)]">{editBrandColor || "#2563eb (default)"}</span>
+                  </div>
                 </div>
 
                 {/* Status Toggle */}
