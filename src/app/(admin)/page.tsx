@@ -179,7 +179,7 @@ export default async function OverviewPage() {
       <Header title="Executive Overview & Analytics" />
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4">
         <StatCard
           title="Total Processed GMV"
           value={formatCurrency(totalVolume)}
@@ -270,7 +270,7 @@ export default async function OverviewPage() {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
+          <table className="w-full min-w-[680px] text-left text-xs">
             <thead>
               <tr className="border-b border-[var(--border)] text-[var(--muted-foreground)]">
                 <th className="pb-3 font-semibold">Order ID</th>

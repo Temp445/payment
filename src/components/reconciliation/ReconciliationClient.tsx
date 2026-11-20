@@ -111,7 +111,7 @@ export function ReconciliationClient({
       )}
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 sm:gap-4">
         <StatCard
           title="Total Cashfree Settled"
           value={formatCurrency(settledVolume)}
@@ -133,10 +133,10 @@ export function ReconciliationClient({
       </div>
 
       {/* Settlements Table */}
-      <div className="p-5 rounded-xl border border-[var(--border)] bg-[var(--card)] shadow-sm space-y-4">
+      <div className="p-3 sm:p-5 rounded-xl border border-[var(--border)] bg-[var(--card)] shadow-sm space-y-4">
         <h3 className="font-semibold text-sm text-[var(--foreground)]">Recent Settlement Batches</h3>
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
+          <table className="w-full min-w-[650px] text-left text-xs">
             <thead>
               <tr className="border-b border-[var(--border)] text-[var(--muted-foreground)]">
                 <th className="pb-3 font-semibold">Settlement ID</th>

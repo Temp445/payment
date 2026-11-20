@@ -47,8 +47,8 @@ function LoginForm() {
   }
 
   return (
-    <div className="min-h-screen bg-[#070b12] text-slate-100 flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-slate-900/90 border border-slate-800 rounded-2xl shadow-2xl p-8 backdrop-blur">
+    <div className="min-h-screen bg-[#070b12] text-slate-100 flex items-center justify-center p-3 sm:p-4">
+      <div className="w-full max-w-md bg-slate-900/90 border border-slate-800 rounded-2xl shadow-2xl p-5 sm:p-8 backdrop-blur">
         {/* Brand Header */}
         <div className="flex flex-col items-center mb-8">
           <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-blue-500/20 mb-3">

@@ -251,9 +251,9 @@ export function OrdersTableClient({ initialOrders }: OrdersTableClientProps) {
       </div>
 
       {/* Orders Table */}
-      <div className="p-5 rounded-xl border border-[var(--border)] bg-[var(--card)] shadow-sm">
+      <div className="p-3 sm:p-5 rounded-xl border border-[var(--border)] bg-[var(--card)] shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
+          <table className="w-full min-w-[850px] text-left text-xs">
             <thead>
               <tr className="border-b border-[var(--border)] text-[var(--muted-foreground)]">
                 <th className="pb-3 font-semibold">Order ID</th>

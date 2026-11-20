@@ -763,6 +763,7 @@ export default function GuidePage() {
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
   const [reactSubTab, setReactSubTab] = useState<"supabase" | "pure">("supabase");
   const [nextjsSubTab, setNextjsSubTab] = useState<"fullstack" | "client">("fullstack");
+  const [mobileDocsNavOpen, setMobileDocsNavOpen] = useState(false);
 
   const toggleCategory = (catTitle: string) => {
     setCollapsedCategories((prev) => ({
@@ -786,18 +787,26 @@ export default function GuidePage() {
   }, [searchQuery]);
 
   return (
-    <div className="flex-1 -m-6 md:-m-8 min-h-screen bg-[#070b12] text-slate-100 flex flex-col font-sans">
+    <div className="flex-1 -m-3.5 sm:-m-5 md:-m-8 min-h-screen bg-[#070b12] text-slate-100 flex flex-col font-sans">
       {/* Top Bar matching Zoho Developer Docs style */}
-      <header className="sticky top-0 z-30 h-14 bg-[#0a0f1d]/95 backdrop-blur border-b border-slate-800/80 px-6 flex items-center justify-between">
-        <div className="flex items-center gap-4">
+      <header className="sticky top-0 z-30 h-14 bg-[#0a0f1d]/95 backdrop-blur border-b border-slate-800/80 px-3 sm:px-6 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 sm:gap-4 shrink-0">
+          <button
+            onClick={() => setMobileDocsNavOpen(!mobileDocsNavOpen)}
+            className="md:hidden p-1.5 rounded-lg text-slate-400 hover:text-white bg-slate-800/80 border border-slate-700 text-xs flex items-center gap-1 cursor-pointer"
+            aria-label="Toggle Documentation Navigation"
+          >
+            <BookOpen className="w-3.5 h-3.5 text-blue-400" />
+            <span className="hidden xs:inline">Docs</span>
+          </button>
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center font-black text-white text-base shadow-md shadow-blue-900/40">
+            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-blue-600 flex items-center justify-center font-black text-white text-sm sm:text-base shadow-md shadow-blue-900/40">
               P
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <span className="font-bold text-sm tracking-tight text-white">Payment Hub</span>
-                <span className="text-[10px] px-1.5 py-0.2 rounded bg-blue-500/10 text-blue-400 font-semibold border border-blue-500/20">
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <span className="font-bold text-xs sm:text-sm tracking-tight text-white">Payment Hub</span>
+                <span className="hidden sm:inline-block text-[10px] px-1.5 py-0.2 rounded bg-blue-500/10 text-blue-400 font-semibold border border-blue-500/20">
                   Developer Docs
                 </span>
               </div>
@@ -806,40 +815,66 @@ export default function GuidePage() {
         </div>
 
         {/* Center Search Input */}
-        <div className="flex-1 max-w-md mx-6">
+        <div className="flex-1 max-w-md mx-2 sm:mx-6">
           <div className="relative">
             <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search documentation, hooks, schemas, APIs..."
+              placeholder="Search docs, APIs, hooks..."
               className="w-full pl-9 pr-3 py-1.5 rounded-lg bg-slate-900/90 border border-slate-700/80 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition"
             />
           </div>
         </div>
 
         {/* Right Actions */}
-        <div className="flex items-center gap-3">
-          <span className="hidden sm:inline-flex text-[11px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+          <span className="hidden lg:inline-flex text-[11px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
             Cashfree v2023 • Live Ready
           </span>
           <Link
             href="/apps"
-            className="text-xs px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold transition flex items-center gap-1.5 shadow-sm"
+            className="text-xs px-2.5 sm:px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold transition flex items-center gap-1.5 shadow-sm"
           >
-            <span>Apps Registry</span>
-            <ExternalLink className="w-3 h-3" />
+            <span>Apps</span>
+            <ExternalLink className="w-3 h-3 hidden sm:inline" />
           </Link>
         </div>
       </header>
 
       {/* Main Two-Column Layout */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden relative">
+        {/* Mobile Docs Drawer Overlay */}
+        {mobileDocsNavOpen && (
+          <div
+            onClick={() => setMobileDocsNavOpen(false)}
+            aria-hidden="true"
+            className="fixed inset-0 z-40 bg-black/70 backdrop-blur-sm md:hidden"
+          />
+        )}
+
         {/* ================================================================= */}
         {/* LEFT SIDEBAR NAVIGATION (Collapsible tree like Zoho Docs) */}
         {/* ================================================================= */}
-        <aside className="w-64 shrink-0 bg-[#070b14] border-r border-slate-800/80 p-3 overflow-y-auto hidden md:block">
+        <aside
+          className={`w-64 shrink-0 bg-[#070b14] border-r border-slate-800/80 p-3 overflow-y-auto ${
+            mobileDocsNavOpen
+              ? "fixed inset-y-0 left-0 z-50 flex flex-col shadow-2xl animate-in slide-in-from-left duration-200 bg-[#070b14]"
+              : "hidden md:block"
+          }`}
+        >
+          {mobileDocsNavOpen && (
+            <div className="flex items-center justify-between pb-3 mb-2 border-b border-slate-800 md:hidden">
+              <span className="font-bold text-xs uppercase text-slate-400">Documentation Topics</span>
+              <button
+                onClick={() => setMobileDocsNavOpen(false)}
+                className="text-xs text-slate-400 hover:text-white p-1"
+              >
+                ✕
+              </button>
+            </div>
+          )}
           <nav className="space-y-4">
             {filteredCategories.map((cat) => {
               const Icon = cat.icon;
@@ -868,7 +903,10 @@ export default function GuidePage() {
                         return (
                           <button
                             key={item.id}
-                            onClick={() => setActiveSection(item.id)}
+                            onClick={() => {
+                              setActiveSection(item.id);
+                              setMobileDocsNavOpen(false);
+                            }}
                             className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs font-medium text-left transition ${
                               isActive
                                 ? "bg-blue-600/15 text-blue-400 font-semibold border-l-2 border-blue-500 -ml-[1px]"
@@ -901,7 +939,7 @@ export default function GuidePage() {
         {/* ================================================================= */}
         {/* RIGHT MAIN CONTENT AREA */}
         {/* ================================================================= */}
-        <main className="flex-1 p-6 lg:p-10 overflow-y-auto max-w-5xl">
+        <main className="flex-1 p-3.5 sm:p-6 lg:p-10 overflow-y-auto max-w-5xl">
           {/* =============================================================== */}
           {/* 1. OVERVIEW PAGE (1:1 Match with Zoho Reference Image 4) */}
           {/* =============================================================== */}

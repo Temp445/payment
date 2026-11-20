@@ -177,10 +177,10 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="flex-1 min-h-screen bg-[var(--background)] flex flex-col">
+    <>
       <Header title="System & Dynamic Runtime Settings" />
 
-      <main className="flex-1 p-6 max-w-4xl w-full mx-auto space-y-6">
+      <div className="max-w-4xl w-full mx-auto space-y-4 sm:space-y-6">
         {/* Banner */}
         <div className="p-4 rounded-xl bg-blue-950/30 border border-blue-800/40 flex items-start gap-3">
           <Database className="w-5 h-5 text-blue-400 mt-0.5 shrink-0" />
@@ -211,7 +211,7 @@ export default function SettingsPage() {
         )}
 
         {/* Settings Form */}
-        <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-6 shadow-sm">
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4 sm:p-6 shadow-sm">
           {loading ? (
             <div className="py-12 text-center text-xs text-[var(--muted-foreground)] flex items-center justify-center gap-2">
               <RefreshCw className="w-4 h-4 animate-spin text-blue-500" />
@@ -265,7 +265,7 @@ export default function SettingsPage() {
                   <label className="font-semibold text-[var(--foreground)]">
                     Gateway Environment (CASHFREE_ENV)
                   </label>
-                  <div className="flex items-center gap-3">
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
                     <label className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 cursor-pointer text-xs">
                       <input
                         type="radio"
@@ -488,7 +488,7 @@ export default function SettingsPage() {
             </li>
           </ul>
         </div>
-      </main>
-    </div>
+      </div>
+    </>
   );
 }

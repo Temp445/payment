@@ -102,9 +102,9 @@ export function RefundsClient({ initialRefunds }: RefundsClientProps) {
       </div>
 
       {/* Refunds Table */}
-      <div className="p-5 rounded-xl border border-[var(--border)] bg-[var(--card)] shadow-sm">
+      <div className="p-3 sm:p-5 rounded-xl border border-[var(--border)] bg-[var(--card)] shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
+          <table className="w-full min-w-[750px] text-left text-xs">
             <thead>
               <tr className="border-b border-[var(--border)] text-[var(--muted-foreground)]">
                 <th className="pb-3 font-semibold">Refund ID</th>
@@ -245,8 +245,8 @@ export function RefundsClient({ initialRefunds }: RefundsClientProps) {
 
       {/* Initiate Refund Modal */}
       {showModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
-          <div className="w-full max-w-md rounded-2xl bg-[var(--card)] border border-[var(--border)] p-6 shadow-xl space-y-4">
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-3 sm:p-4">
+          <div className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl bg-[var(--card)] border border-[var(--border)] p-4 sm:p-6 shadow-xl space-y-4">
             <div className="flex items-center justify-between border-b border-[var(--border)] pb-3">
               <h3 className="font-bold text-sm text-[var(--foreground)] flex items-center gap-2">
                 <RotateCcw className="w-4 h-4 text-blue-400" />

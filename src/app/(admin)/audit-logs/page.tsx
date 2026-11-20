@@ -28,9 +28,9 @@ export default async function AuditLogsPage() {
         </p>
       </div>
 
-      <div className="p-5 rounded-xl border border-[var(--border)] bg-[var(--card)] shadow-sm">
+      <div className="p-3 sm:p-5 rounded-xl border border-[var(--border)] bg-[var(--card)] shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
+          <table className="w-full min-w-[750px] text-left text-xs">
             <thead>
               <tr className="border-b border-[var(--border)] text-[var(--muted-foreground)]">
                 <th className="pb-3 font-semibold">Action</th>

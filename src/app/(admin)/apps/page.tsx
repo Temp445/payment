@@ -283,7 +283,7 @@ export default function ApplicationsPage() {
       </div>
 
       {/* Apps Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
         {loading ? (
           <div className="col-span-full py-12 text-center text-xs text-[var(--muted-foreground)]">
             Loading tenant applications...
@@ -394,8 +394,8 @@ export default function ApplicationsPage() {
       {/* MODAL 1: REGISTER NEW APP */}
       {/* ========================================================================= */}
       {showModal && (
-        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
-          <div className="w-full max-w-md rounded-2xl bg-[var(--card)] border border-[var(--border)] p-6 shadow-xl space-y-5">
+        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-3 sm:p-4">
+          <div className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl bg-[var(--card)] border border-[var(--border)] p-4 sm:p-6 shadow-xl space-y-5">
             <div className="flex items-center justify-between">
               <h3 className="font-bold text-sm text-[var(--foreground)]">
                 {newCredentials ? "Application Credentials Created" : "Onboard New Application"}

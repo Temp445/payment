@@ -17,7 +17,7 @@ export function OrderDetailDrawer({ order, onClose }: OrderDetailDrawerProps) {
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden bg-black/60 flex justify-end">
-      <div className="w-full max-w-xl bg-[var(--card)] border-l border-[var(--border)] h-full overflow-y-auto p-6 space-y-6 shadow-2xl animate-in slide-in-from-right duration-200">
+      <div className="w-full max-w-xl bg-[var(--card)] border-l border-[var(--border)] h-full overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-6 shadow-2xl animate-in slide-in-from-right duration-200">
         
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-[var(--border)]">
@@ -39,7 +39,7 @@ export function OrderDetailDrawer({ order, onClose }: OrderDetailDrawerProps) {
         </div>
 
         {/* Amount & App Overview */}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
           <div className="p-4 rounded-xl bg-[var(--background)] border border-[var(--border)]">
             <span className="text-[11px] uppercase tracking-wider text-[var(--muted-foreground)]">Order Amount</span>
             <div className="text-xl font-bold text-emerald-400 mt-1">
@@ -63,7 +63,7 @@ export function OrderDetailDrawer({ order, onClose }: OrderDetailDrawerProps) {
             <User className="w-3.5 h-3.5 text-blue-400" />
             Customer Information
           </h4>
-          <div className="grid grid-cols-2 gap-3 text-xs">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
             <div>
               <span className="text-[var(--muted-foreground)] block">Customer Name</span>
               <span className="font-medium text-white">{order.customerName || "-"}</span>
@@ -90,7 +90,7 @@ export function OrderDetailDrawer({ order, onClose }: OrderDetailDrawerProps) {
             Payment Gateway Details
           </h4>
           {payment ? (
-            <div className="grid grid-cols-2 gap-3 text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
               <div>
                 <span className="text-[var(--muted-foreground)] block">Cashfree Payment ID</span>
                 <span className="font-mono text-white font-medium">{payment.cfPaymentId}</span>
