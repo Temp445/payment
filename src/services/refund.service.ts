@@ -16,11 +16,15 @@ export class RefundService {
       note?: string;
     }
   ) {
-    // 1. Locate order
+    // 1. Locate order (supports matching by either appOrderId or cfOrderId)
+    const trimmedId = params.orderId.trim();
     const order = await prisma.order.findFirst({
       where: {
         applicationId: app.id,
-        appOrderId: params.orderId,
+        OR: [
+          { appOrderId: trimmedId },
+          { cfOrderId: trimmedId },
+        ],
       },
       include: {
         payments: {

@@ -51,18 +51,16 @@ export function RefundsClient({ initialRefunds }: RefundsClientProps) {
     setError(null);
 
     try {
-      // Find the app credentials or send admin request
       const res = await fetch("/api/v1/refunds", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-client-id": `pub_live_${appCode.toLowerCase()}`, // or admin override
-          "x-client-secret": "sec_live_admin",
         },
         body: JSON.stringify({
-          order_id: orderId,
+          order_id: orderId.trim(),
           refund_amount: parseFloat(refundAmount),
-          note: refundNote,
+          note: refundNote.trim() || undefined,
+          app_code: appCode.trim() || undefined,
         }),
       });
 
@@ -272,12 +270,11 @@ export function RefundsClient({ initialRefunds }: RefundsClientProps) {
             <form onSubmit={handleCreateRefund} className="space-y-3 text-xs">
               <div>
                 <label className="block text-[var(--muted-foreground)] mb-1">
-                  Tenant App Code
+                  Tenant App Code <span className="text-[10px] opacity-70">(Optional)</span>
                 </label>
                 <input
                   type="text"
-                  required
-                  placeholder="APP001"
+                  placeholder="e.g. REAL_ESTATE_CRM"
                   value={appCode}
                   onChange={(e) => setAppCode(e.target.value.toUpperCase())}
                   className="w-full px-3 py-2 rounded-lg bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)] font-mono focus:outline-none focus:border-blue-500"
@@ -291,7 +288,7 @@ export function RefundsClient({ initialRefunds }: RefundsClientProps) {
                 <input
                   type="text"
                   required
-                  placeholder="APP001_ORD_99182"
+                  placeholder="e.g. ORD_... or REALESTA_ORD_..."
                   value={orderId}
                   onChange={(e) => setOrderId(e.target.value)}
                   className="w-full px-3 py-2 rounded-lg bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)] font-mono focus:outline-none focus:border-blue-500"
