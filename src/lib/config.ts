@@ -26,6 +26,23 @@ let cachedConfig: HubConfigCache = {
 let initPromise: Promise<void> | null = null;
 
 /**
+ * Ensures database configuration is fully loaded into memory before proceeding.
+ * Critical for serverless environments (Netlify / Vercel / AWS Lambda) to prevent cold-start race conditions.
+ */
+export async function ensureHubConfigLoaded(): Promise<HubConfigCache> {
+  const now = Date.now();
+  if (cachedConfig.lastFetched > 0 && now - cachedConfig.lastFetched < CACHE_TTL_MS) {
+    return cachedConfig;
+  }
+  if (!initPromise) {
+    initPromise = initHubConfig();
+  }
+  await initPromise;
+  initPromise = null;
+  return cachedConfig;
+}
+
+/**
  * Format and deduplicate comma- or newline-separated URLs
  */
 export function cleanMultiUrls(input: string): string {

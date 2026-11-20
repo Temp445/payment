@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { CashfreeAdapter } from "@/lib/cashfree";
+import { ensureHubConfigLoaded } from "@/lib/config";
 import { canTransitionOrder } from "@/lib/stateMachine";
 import { OutboxWorker } from "@/lib/outboxWorker";
 import { logger } from "@/lib/logger";
@@ -16,6 +17,8 @@ export class WebhookService {
     signature: string | null,
     timestamp: string | null
   ) {
+    await ensureHubConfigLoaded();
+
     // 1. Verify Cashfree HMAC-SHA256 Signature
     if (!signature || !timestamp) {
       logger.warn("Cashfree webhook missing signature or timestamp headers");

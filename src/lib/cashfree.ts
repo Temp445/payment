@@ -2,10 +2,23 @@ import { Cashfree } from "cashfree-pg";
 import crypto from "crypto";
 import axios from "axios";
 import { logger } from "./logger";
-import { getCachedHubUrl, getCachedCashfreeConfig } from "./config";
+import { getCachedHubUrl, getCachedCashfreeConfig, ensureHubConfigLoaded } from "./config";
 
-// Setup Cashfree SDK configuration dynamically from database or .env
-function getCashfreeConfig() {
+// Setup Cashfree SDK configuration dynamically from database or in-memory cache
+async function getCashfreeConfigAsync() {
+  await ensureHubConfigLoaded();
+  const { appId, secretKey, isProd, baseUrl, apiVersion } = getCachedCashfreeConfig();
+
+  Cashfree.XClientId = appId;
+  Cashfree.XClientSecret = secretKey;
+  Cashfree.XEnvironment = isProd
+    ? Cashfree.Environment.PRODUCTION
+    : Cashfree.Environment.SANDBOX;
+
+  return { appId, secretKey, isProd, baseUrl, apiVersion };
+}
+
+function getCashfreeConfigSync() {
   const { appId, secretKey, isProd, baseUrl, apiVersion } = getCachedCashfreeConfig();
 
   Cashfree.XClientId = appId;
@@ -22,8 +35,12 @@ export class CashfreeAdapter {
     return getCachedCashfreeConfig().apiVersion || "2023-08-01";
   }
 
-  private static ensureConfigured() {
-    return getCashfreeConfig();
+  private static async ensureConfigured() {
+    return getCashfreeConfigAsync();
+  }
+
+  private static ensureConfiguredSync() {
+    return getCashfreeConfigSync();
   }
 
   /**
@@ -44,7 +61,7 @@ export class CashfreeAdapter {
     note?: string;
   }) {
     try {
-      const config = this.ensureConfigured();
+      const config = await this.ensureConfigured();
       if (!config.appId || !config.secretKey) {
         throw new Error(
           "Cashfree credentials are missing. Please configure them in Settings."
@@ -89,7 +106,7 @@ export class CashfreeAdapter {
    */
   static async getOrderPayments(cfOrderId: string) {
     try {
-      this.ensureConfigured();
+      await this.ensureConfigured();
       const response = await Cashfree.PGOrderFetchPayments(this.getApiVersion(), cfOrderId);
       return response.data;
     } catch (error: any) {
@@ -105,7 +122,7 @@ export class CashfreeAdapter {
    */
   static async terminateOrder(cfOrderId: string) {
     try {
-      const { appId, secretKey, baseUrl } = this.ensureConfigured();
+      const { appId, secretKey, baseUrl } = await this.ensureConfigured();
       const response = await axios.patch(
         `${baseUrl}/orders/${cfOrderId}`,
         { order_status: "TERMINATED" },
@@ -137,7 +154,7 @@ export class CashfreeAdapter {
     paymentMethod: any;
   }) {
     try {
-      const { appId, secretKey, baseUrl } = this.ensureConfigured();
+      const { appId, secretKey, baseUrl } = await this.ensureConfigured();
       const response = await axios.post(
         `${baseUrl}/orders/sessions`,
         {
@@ -172,7 +189,7 @@ export class CashfreeAdapter {
     note?: string;
   }) {
     try {
-      this.ensureConfigured();
+      await this.ensureConfigured();
       const request = {
         refund_amount: params.refundAmount,
         refund_id: params.refundId,
@@ -198,7 +215,7 @@ export class CashfreeAdapter {
    */
   static async fetchSettlements(limit = 20) {
     try {
-      const { appId, secretKey, baseUrl } = this.ensureConfigured();
+      const { appId, secretKey, baseUrl } = await this.ensureConfigured();
       const response = await axios.get(`${baseUrl}/settlements`, {
         headers: {
           "x-client-id": appId,
@@ -229,7 +246,7 @@ export class CashfreeAdapter {
     }
 
     try {
-      const { secretKey } = this.ensureConfigured();
+      const { secretKey } = this.ensureConfiguredSync();
       const payload = `${timestamp}${rawBody}`;
       const expectedSignature = crypto
         .createHmac("sha256", secretKey)

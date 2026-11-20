@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { CashfreeAdapter } from "@/lib/cashfree";
 import { AuthenticatedApp } from "@/lib/auth";
 import { logger } from "@/lib/logger";
-import { getCachedCashfreeConfig } from "@/lib/config";
+import { getCachedCashfreeConfig, ensureHubConfigLoaded } from "@/lib/config";
 import { SubscriptionService } from "./subscription.service";
 
 export interface CreateOrderInput {
@@ -39,6 +39,7 @@ export class OrderService {
    * Create an order and generate Cashfree payment session
    */
   static async createOrder(app: AuthenticatedApp, input: CreateOrderInput, hubOrigin?: string) {
+    await ensureHubConfigLoaded();
     const cfOrderId = this.formatCashfreeOrderId(app.appCode, input.order_id);
 
     // 1. Check for existing order (Idempotency)
