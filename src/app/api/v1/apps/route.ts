@@ -25,7 +25,7 @@ const createAppSchema = z.object({
 export async function GET(req: NextRequest) {
   try {
     const authHeader = req.headers.get("authorization");
-    if (!verifyAdminAuth(authHeader)) {
+    if (!verifyAdminAuth(authHeader, req)) {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
     }
 
@@ -50,7 +50,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const authHeader = req.headers.get("authorization");
-    if (!verifyAdminAuth(authHeader)) {
+    if (!verifyAdminAuth(authHeader, req)) {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
     }
 

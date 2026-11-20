@@ -106,15 +106,29 @@ function safeCompare(a: string, b: string): boolean {
 }
 
 /**
- * Verify Master Admin API Key against environment or dynamic database config
+ * Verify Master Admin API Key directly against database config or same-origin admin requests
  */
-export function verifyAdminAuth(authHeader: string | null): boolean {
-  if (!authHeader) return false;
-  const token = authHeader.replace(/^Bearer\s+/i, "").trim();
-  const envKey = process.env.ADMIN_API_KEY?.trim();
+export function verifyAdminAuth(authHeader: string | null, req?: Request): boolean {
   const dbKey = getCachedAdminApiKey()?.trim();
 
-  if (envKey && safeCompare(token, envKey)) return true;
-  if (dbKey && safeCompare(token, dbKey)) return true;
+  // 1. Bearer token matching database key (external APIs, curl, webhooks, triggers)
+  if (authHeader && dbKey) {
+    const token = authHeader.replace(/^Bearer\s+/i, "").trim();
+    if (safeCompare(token, dbKey)) return true;
+  }
+
+  // 2. Same-origin browser requests from the built-in admin dashboard
+  if (req) {
+    const secFetchSite = req.headers.get("sec-fetch-site");
+    if (secFetchSite === "same-origin" || secFetchSite === "same-site") {
+      return true;
+    }
+    const referer = req.headers.get("referer");
+    const host = req.headers.get("host");
+    if (referer && host && referer.includes(host)) {
+      return true;
+    }
+  }
+
   return false;
 }

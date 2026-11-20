@@ -14,12 +14,12 @@ interface HubConfigCache {
 const CACHE_TTL_MS = 30 * 1000; // 30-second in-memory cache
 
 let cachedConfig: HubConfigCache = {
-  hubUrl: process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
-  adminApiKey: process.env.ADMIN_API_KEY || "admin_secret_hub_master_key_change_me",
-  cashfreeEnv: process.env.CASHFREE_ENV || "TEST",
-  cashfreeAppId: process.env.CASHFREE_APP_ID || "",
-  cashfreeSecretKey: process.env.CASHFREE_SECRET_KEY || "",
-  cashfreeApiVersion: process.env.CASHFREE_API_VERSION || "2023-08-01",
+  hubUrl: "",
+  adminApiKey: "",
+  cashfreeEnv: "TEST",
+  cashfreeAppId: "",
+  cashfreeSecretKey: "",
+  cashfreeApiVersion: "2023-08-01",
   lastFetched: 0,
 };
 
@@ -52,46 +52,17 @@ export async function initHubConfig(): Promise<void> {
       configMap[row.key] = row.value;
     }
 
-    const defaultHubUrl = cleanMultiUrls(
-      process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000, http://localhost:3002"
-    );
-    const defaultAdminKey = (
-      process.env.ADMIN_API_KEY || "admin_secret_hub_master_key_change_me"
-    ).trim();
-    const defaultCashfreeEnv = (process.env.CASHFREE_ENV || "TEST").trim();
-    const defaultCashfreeAppId = (process.env.CASHFREE_APP_ID || "").trim();
-    const defaultCashfreeSecretKey = (process.env.CASHFREE_SECRET_KEY || "").trim();
-    const defaultCashfreeApiVersion = (process.env.CASHFREE_API_VERSION || "2023-08-01").trim();
-
-    // If hub_url is not in database, seed it once
-    if (!configMap["hub_url"]) {
-      await prisma.paymentHubConfig.upsert({
-        where: { key: "hub_url" },
-        update: { value: defaultHubUrl },
-        create: { key: "hub_url", value: defaultHubUrl },
-      });
-      configMap["hub_url"] = defaultHubUrl;
-    }
-
-    // If admin_api_key is not in database, seed it once
-    if (!configMap["admin_api_key"]) {
-      await prisma.paymentHubConfig.upsert({
-        where: { key: "admin_api_key" },
-        update: { value: defaultAdminKey },
-        create: { key: "admin_api_key", value: defaultAdminKey },
-      });
-      configMap["admin_api_key"] = defaultAdminKey;
-    }
-
-    // Cashfree dynamic keys: fallback to .env if not yet in DB
-    const cashfreeEnv = (configMap["cashfree_env"] || defaultCashfreeEnv || "TEST").trim().toUpperCase();
-    const cashfreeAppId = (configMap["cashfree_app_id"] || defaultCashfreeAppId).trim();
-    const cashfreeSecretKey = (configMap["cashfree_secret_key"] || defaultCashfreeSecretKey).trim();
-    const cashfreeApiVersion = (configMap["cashfree_api_version"] || defaultCashfreeApiVersion || "2023-08-01").trim();
+    // Cashfree gateway credentials, admin key, & Hub URL: fetched directly from database (payment_hub_config)
+    const hubUrl = cleanMultiUrls(configMap["hub_url"] || "");
+    const adminApiKey = (configMap["admin_api_key"] || "").trim();
+    const cashfreeEnv = (configMap["cashfree_env"] || "TEST").trim().toUpperCase();
+    const cashfreeAppId = (configMap["cashfree_app_id"] || "").trim();
+    const cashfreeSecretKey = (configMap["cashfree_secret_key"] || "").trim();
+    const cashfreeApiVersion = (configMap["cashfree_api_version"] || "2023-08-01").trim();
 
     cachedConfig = {
-      hubUrl: cleanMultiUrls(configMap["hub_url"]),
-      adminApiKey: configMap["admin_api_key"].trim(),
+      hubUrl,
+      adminApiKey,
       cashfreeEnv,
       cashfreeAppId,
       cashfreeSecretKey,
@@ -303,8 +274,7 @@ export async function getHubConfig(): Promise<{
 }
 
 /**
- * Synchronous getter for Cashfree credentials using in-memory cache
- * Priority: Database (payment_hub_config) -> Fallback: Environment variables (.env)
+ * Synchronous getter for Cashfree credentials using in-memory cache directly from database
  */
 export function getCachedCashfreeConfig(): {
   appId: string;
@@ -315,11 +285,11 @@ export function getCachedCashfreeConfig(): {
   baseUrl: string;
 } {
   ensureBackgroundInit();
-  const env = (cachedConfig.cashfreeEnv || process.env.CASHFREE_ENV || "TEST").trim().toUpperCase();
+  const env = (cachedConfig.cashfreeEnv || "TEST").trim().toUpperCase();
   const isProd = env === "PRODUCTION";
-  const appId = (cachedConfig.cashfreeAppId || process.env.CASHFREE_APP_ID || "").trim();
-  const secretKey = (cachedConfig.cashfreeSecretKey || process.env.CASHFREE_SECRET_KEY || "").trim();
-  const apiVersion = (cachedConfig.cashfreeApiVersion || process.env.CASHFREE_API_VERSION || "2023-08-01").trim();
+  const appId = (cachedConfig.cashfreeAppId || "").trim();
+  const secretKey = (cachedConfig.cashfreeSecretKey || "").trim();
+  const apiVersion = (cachedConfig.cashfreeApiVersion || "2023-08-01").trim();
   const baseUrl = isProd
     ? "https://api.cashfree.com/pg"
     : "https://sandbox.cashfree.com/pg";
@@ -333,20 +303,20 @@ export function getCachedCashfreeConfig(): {
  */
 export function getCachedHubUrl(preferredOrigin?: string): string {
   ensureBackgroundInit();
-  const list = getHubUrls();
 
   if (preferredOrigin) {
     const cleanPreferred = preferredOrigin.trim().replace(/\/$/, "");
-    if (list.includes(cleanPreferred)) {
-      return cleanPreferred;
-    }
-    // Also accept if it's a valid localhost port or Netlify URL
     if (cleanPreferred.startsWith("http://") || cleanPreferred.startsWith("https://")) {
       return cleanPreferred;
     }
   }
 
-  return list[0] || "http://localhost:3000";
+  const list = getHubUrls();
+  if (list.length > 0) {
+    return list[0];
+  }
+
+  return "http://localhost:3000";
 }
 
 /**

@@ -18,9 +18,8 @@ async function handleOutboxProcess(req: NextRequest) {
   const authKey = req.nextUrl.searchParams.get("key");
 
   const isAuthorized =
-    verifyAdminAuth(authHeader) ||
-    (authKey && authKey.trim() === getCachedAdminApiKey().trim()) ||
-    (authKey && authKey.trim() === (process.env.ADMIN_API_KEY || "").trim());
+    verifyAdminAuth(authHeader, req) ||
+    (authKey && authKey.trim() === getCachedAdminApiKey().trim());
 
   if (!isAuthorized) {
     return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });

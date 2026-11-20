@@ -47,7 +47,7 @@ export class CashfreeAdapter {
       const config = this.ensureConfigured();
       if (!config.appId || !config.secretKey) {
         throw new Error(
-          "Cashfree credentials (CASHFREE_APP_ID, CASHFREE_SECRET_KEY) are missing. Please configure them in Settings or .env."
+          "Cashfree credentials are missing. Please configure them in Settings."
         );
       }
 
@@ -126,6 +126,39 @@ export class CashfreeAdapter {
         }`
       );
       return null;
+    }
+  }
+
+  /**
+   * Pay Order Session directly via Cashfree S2S Orders Sessions API
+   */
+  static async payOrderSession(params: {
+    paymentSessionId: string;
+    paymentMethod: any;
+  }) {
+    try {
+      const { appId, secretKey, baseUrl } = this.ensureConfigured();
+      const response = await axios.post(
+        `${baseUrl}/orders/sessions`,
+        {
+          payment_session_id: params.paymentSessionId,
+          payment_method: params.paymentMethod,
+        },
+        {
+          headers: {
+            "x-client-id": appId,
+            "x-client-secret": secretKey,
+            "x-api-version": this.getApiVersion(),
+            "Content-Type": "application/json",
+          },
+        }
+      );
+      return response.data;
+    } catch (error: any) {
+      logger.error("CashfreeAdapter.payOrderSession failed", error?.response?.data || error);
+      throw new Error(
+        error?.response?.data?.message || error.message || "Payment request failed on gateway"
+      );
     }
   }
 

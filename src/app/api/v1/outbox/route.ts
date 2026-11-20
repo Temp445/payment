@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 export async function GET(req: NextRequest) {
   try {
     const authHeader = req.headers.get("authorization");
-    if (!verifyAdminAuth(authHeader)) {
+    if (!verifyAdminAuth(authHeader, req)) {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
     }
 

@@ -3,8 +3,8 @@ import { prisma } from "./prisma";
 import { logger } from "./logger";
 
 export class OutboxWorker {
-  private static timeoutMs = Number(process.env.OUTBOX_TIMEOUT_MS) || 4000;
-  private static maxRetries = Number(process.env.OUTBOX_MAX_RETRIES) || 5;
+  private static timeoutMs = 4000;
+  private static maxRetries = 5;
 
   /**
    * Process a batch of pending webhook deliveries.
