@@ -172,6 +172,7 @@ export class WebhookService {
             offerPeriodType: metadata.offer_period_type || "month",
             organizationId: metadata.organization_id,
             userId: metadata.user_id || undefined,
+            applicationId: order.applicationId,
           });
           logger.info(`Subscription transaction auto-activated for org ${metadata.organization_id}`);
         } catch (subErr: any) {

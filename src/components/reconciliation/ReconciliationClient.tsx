@@ -3,7 +3,17 @@
 import React, { useState } from "react";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import { RefreshCw, Landmark, CheckCircle2, Clock, Check } from "lucide-react";
+import {
+  RefreshCw,
+  Landmark,
+  CheckCircle2,
+  Clock,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+} from "lucide-react";
 
 interface ReconciliationClientProps {
   settledVolume: number;
@@ -21,6 +31,29 @@ export function ReconciliationClient({
   const [settlements, setSettlements] = useState<any[]>(initialSettlements);
   const [syncing, setSyncing] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  const totalItems = settlements.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const startIndex = (safeCurrentPage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, totalItems);
+  const paginatedSettlements = settlements.slice(startIndex, endIndex);
+
+  const getPageNumbers = () => {
+    const pages: number[] = [];
+    const maxButtons = 5;
+    let start = Math.max(1, safeCurrentPage - Math.floor(maxButtons / 2));
+    let end = Math.min(totalPages, start + maxButtons - 1);
+    if (end - start + 1 < maxButtons) {
+      start = Math.max(1, end - maxButtons + 1);
+    }
+    for (let i = start; i <= end; i++) {
+      pages.push(i);
+    }
+    return pages;
+  };
 
   const discrepancy = paidVolume - settledVolume;
 
@@ -114,14 +147,14 @@ export function ReconciliationClient({
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--border)]">
-              {settlements.length === 0 ? (
+              {paginatedSettlements.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="py-8 text-center text-[var(--muted-foreground)]">
                     No settlement records found. Click &quot;Sync Settlements from Cashfree&quot; to fetch payout batches.
                   </td>
                 </tr>
               ) : (
-                settlements.map((item) => (
+                paginatedSettlements.map((item) => (
                   <tr key={item.id} className="hover:bg-slate-800/40">
                     <td className="py-3 font-mono font-bold text-white">
                       {item.cfSettlementId}
@@ -146,6 +179,94 @@ export function ReconciliationClient({
             </tbody>
           </table>
         </div>
+
+        {/* Pagination Toolbar */}
+        {totalItems > 0 && (
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 mt-2 border-t border-[var(--border)]">
+            <div className="flex items-center gap-4 text-xs text-[var(--muted-foreground)]">
+              <span>
+                Showing <strong className="text-[var(--foreground)]">{startIndex + 1}</strong> to{" "}
+                <strong className="text-[var(--foreground)]">{endIndex}</strong> of{" "}
+                <strong className="text-[var(--foreground)]">{totalItems}</strong> settlements
+              </span>
+
+              <div className="flex items-center gap-1.5">
+                <span>Rows:</span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
+                  aria-label="Rows per page"
+                  className="px-2 py-1 rounded bg-[var(--background)] border border-[var(--border)] text-xs text-[var(--foreground)] focus:outline-none focus:border-blue-500"
+                >
+                  <option value={10}>10</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setCurrentPage(1)}
+                disabled={safeCurrentPage === 1}
+                title="First page"
+                aria-label="First page"
+                className="p-1.5 rounded-lg border border-[var(--border)] bg-[var(--background)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed transition"
+              >
+                <ChevronsLeft className="w-4 h-4" />
+              </button>
+
+              <button
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={safeCurrentPage === 1}
+                title="Previous page"
+                aria-label="Previous page"
+                className="p-1.5 rounded-lg border border-[var(--border)] bg-[var(--background)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed transition"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+
+              <div className="flex items-center gap-1 mx-1">
+                {getPageNumbers().map((pageNum) => (
+                  <button
+                    key={pageNum}
+                    onClick={() => setCurrentPage(pageNum)}
+                    className={`min-w-[32px] h-8 px-2 rounded-lg text-xs font-medium transition ${
+                      pageNum === safeCurrentPage
+                        ? "bg-blue-600 text-white shadow-sm"
+                        : "border border-[var(--border)] bg-[var(--background)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-slate-800"
+                    }`}
+                  >
+                    {pageNum}
+                  </button>
+                ))}
+              </div>
+
+              <button
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={safeCurrentPage === totalPages || totalItems === 0}
+                title="Next page"
+                aria-label="Next page"
+                className="p-1.5 rounded-lg border border-[var(--border)] bg-[var(--background)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed transition"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+
+              <button
+                onClick={() => setCurrentPage(totalPages)}
+                disabled={safeCurrentPage === totalPages || totalItems === 0}
+                title="Last page"
+                aria-label="Last page"
+                className="p-1.5 rounded-lg border border-[var(--border)] bg-[var(--background)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed transition"
+              >
+                <ChevronsRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

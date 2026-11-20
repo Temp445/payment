@@ -1,10 +1,20 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { StatusBadge } from "@/components/ui/Badge";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { OrderDetailDrawer } from "@/components/orders/OrderDetailDrawer";
-import { Eye, Search, Filter } from "lucide-react";
+import {
+  Eye,
+  Search,
+  Filter,
+  Calendar,
+  X,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+} from "lucide-react";
 
 interface OrdersTableClientProps {
   initialOrders: any[];
@@ -15,50 +25,228 @@ export function OrdersTableClient({ initialOrders }: OrdersTableClientProps) {
   const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
+  const [datePreset, setDatePreset] = useState("ALL");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
-  const filteredOrders = orders.filter((o) => {
-    const matchesSearch =
-      o.appOrderId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      o.cfOrderId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (o.customerPhone && o.customerPhone.includes(searchTerm)) ||
-      (o.application?.appCode && o.application.appCode.toLowerCase().includes(searchTerm.toLowerCase()));
+  // Filter orders
+  const filteredOrders = useMemo(() => {
+    return orders.filter((o) => {
+      const term = searchTerm.toLowerCase().trim();
+      const matchesSearch =
+        !term ||
+        o.appOrderId?.toLowerCase().includes(term) ||
+        o.cfOrderId?.toLowerCase().includes(term) ||
+        (o.customerPhone && o.customerPhone.includes(term)) ||
+        (o.customerName && o.customerName.toLowerCase().includes(term)) ||
+        (o.application?.appCode && o.application.appCode.toLowerCase().includes(term));
 
-    const matchesStatus =
-      statusFilter === "ALL" || o.orderStatus === statusFilter;
+      const matchesStatus =
+        statusFilter === "ALL" || o.orderStatus === statusFilter;
 
-    return matchesSearch && matchesStatus;
-  });
+      // Date filtering
+      let matchesDate = true;
+      if (datePreset !== "ALL" || startDate || endDate) {
+        const orderDate = new Date(o.createdAt);
+        const orderTime = orderDate.getTime();
+        const now = new Date();
+
+        if (datePreset === "TODAY") {
+          const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+          matchesDate = orderTime >= startOfToday;
+        } else if (datePreset === "YESTERDAY") {
+          const startOfYesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1).getTime();
+          const endOfYesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() - 1;
+          matchesDate = orderTime >= startOfYesterday && orderTime <= endOfYesterday;
+        } else if (datePreset === "7D") {
+          const sevenDaysAgo = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7).getTime();
+          matchesDate = orderTime >= sevenDaysAgo;
+        } else if (datePreset === "30D") {
+          const thirtyDaysAgo = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30).getTime();
+          matchesDate = orderTime >= thirtyDaysAgo;
+        } else if (datePreset === "THIS_MONTH") {
+          const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+          matchesDate = orderTime >= startOfMonth;
+        } else if (datePreset === "CUSTOM") {
+          if (startDate) {
+            const start = new Date(startDate + "T00:00:00").getTime();
+            if (orderTime < start) matchesDate = false;
+          }
+          if (endDate) {
+            const end = new Date(endDate + "T23:59:59.999").getTime();
+            if (orderTime > end) matchesDate = false;
+          }
+        }
+      }
+
+      return matchesSearch && matchesStatus && matchesDate;
+    });
+  }, [orders, searchTerm, statusFilter, datePreset, startDate, endDate]);
+
+  // Reset page when filter or search changes
+  const handleSearchChange = (val: string) => {
+    setSearchTerm(val);
+    setCurrentPage(1);
+  };
+
+  const handleStatusChange = (val: string) => {
+    setStatusFilter(val);
+    setCurrentPage(1);
+  };
+
+  const handleDatePresetChange = (val: string) => {
+    setDatePreset(val);
+    if (val !== "CUSTOM") {
+      setStartDate("");
+      setEndDate("");
+    }
+    setCurrentPage(1);
+  };
+
+  const handleStartDateChange = (val: string) => {
+    setStartDate(val);
+    setCurrentPage(1);
+  };
+
+  const handleEndDateChange = (val: string) => {
+    setEndDate(val);
+    setCurrentPage(1);
+  };
+
+  const handleResetFilters = () => {
+    setSearchTerm("");
+    setStatusFilter("ALL");
+    setDatePreset("ALL");
+    setStartDate("");
+    setEndDate("");
+    setCurrentPage(1);
+  };
+
+  const hasActiveFilters =
+    searchTerm ||
+    statusFilter !== "ALL" ||
+    datePreset !== "ALL" ||
+    startDate ||
+    endDate;
+
+  const handlePageSizeChange = (val: number) => {
+    setPageSize(val);
+    setCurrentPage(1);
+  };
+
+  // Pagination calculations
+  const totalItems = filteredOrders.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const startIndex = (safeCurrentPage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, totalItems);
+  const paginatedOrders = filteredOrders.slice(startIndex, endIndex);
+
+  // Generate page numbers array (up to 5 buttons centered on current page)
+  const getPageNumbers = () => {
+    const pages: number[] = [];
+    const maxButtons = 5;
+    let start = Math.max(1, safeCurrentPage - Math.floor(maxButtons / 2));
+    let end = Math.min(totalPages, start + maxButtons - 1);
+    if (end - start + 1 < maxButtons) {
+      start = Math.max(1, end - maxButtons + 1);
+    }
+    for (let i = start; i <= end; i++) {
+      pages.push(i);
+    }
+    return pages;
+  };
 
   return (
     <div className="space-y-4">
       {/* Search and Filters */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-        <div className="relative w-full sm:w-80">
+      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3">
+        {/* Search input */}
+        <div className="relative w-full xl:w-72">
           <Search className="w-4 h-4 text-[var(--muted-foreground)] absolute left-3 top-2.5" />
           <input
             type="text"
-            placeholder="Search by order ID, phone, app..."
+            placeholder="Search order ID, phone, customer, app..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => handleSearchChange(e.target.value)}
             className="w-full pl-9 pr-3 py-2 rounded-lg bg-[var(--card)] border border-[var(--border)] text-xs text-[var(--foreground)] focus:outline-none focus:border-blue-500"
           />
         </div>
 
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          <Filter className="w-4 h-4 text-[var(--muted-foreground)]" />
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-3 py-2 rounded-lg bg-[var(--card)] border border-[var(--border)] text-xs text-[var(--foreground)] focus:outline-none focus:border-blue-500"
-          >
-            <option value="ALL">All Statuses</option>
-            <option value="PAID">PAID</option>
-            <option value="ACTIVE">ACTIVE</option>
-            <option value="CREATED">CREATED</option>
-            <option value="FAILED">FAILED</option>
-            <option value="PARTIALLY_REFUNDED">PARTIALLY_REFUNDED</option>
-            <option value="REFUNDED">REFUNDED</option>
-          </select>
+        {/* Filters Group: Date + Status + Reset */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Date Filter Preset */}
+          <div className="flex items-center gap-1.5">
+            <Calendar className="w-4 h-4 text-[var(--muted-foreground)]" />
+            <select
+              value={datePreset}
+              onChange={(e) => handleDatePresetChange(e.target.value)}
+              aria-label="Filter by date range"
+              className="px-3 py-2 rounded-lg bg-[var(--card)] border border-[var(--border)] text-xs text-[var(--foreground)] focus:outline-none focus:border-blue-500"
+            >
+              <option value="ALL">All Dates</option>
+              <option value="TODAY">Today</option>
+              <option value="YESTERDAY">Yesterday</option>
+              <option value="7D">Last 7 Days</option>
+              <option value="30D">Last 30 Days</option>
+              <option value="THIS_MONTH">This Month</option>
+              <option value="CUSTOM">Custom Range...</option>
+            </select>
+          </div>
+
+          {/* Custom Date Range Picker */}
+          {datePreset === "CUSTOM" && (
+            <div className="flex items-center gap-1.5 text-xs bg-[var(--card)] px-2 py-1 rounded-lg border border-[var(--border)]">
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => handleStartDateChange(e.target.value)}
+                aria-label="Start date"
+                className="bg-transparent text-xs text-[var(--foreground)] focus:outline-none"
+              />
+              <span className="text-[var(--muted-foreground)] text-[11px]">to</span>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => handleEndDateChange(e.target.value)}
+                aria-label="End date"
+                className="bg-transparent text-xs text-[var(--foreground)] focus:outline-none"
+              />
+            </div>
+          )}
+
+          {/* Status Filter */}
+          <div className="flex items-center gap-1.5">
+            <Filter className="w-4 h-4 text-[var(--muted-foreground)]" />
+            <select
+              value={statusFilter}
+              onChange={(e) => handleStatusChange(e.target.value)}
+              aria-label="Filter by order status"
+              className="px-3 py-2 rounded-lg bg-[var(--card)] border border-[var(--border)] text-xs text-[var(--foreground)] focus:outline-none focus:border-blue-500"
+            >
+              <option value="ALL">All Statuses</option>
+              <option value="PAID">PAID</option>
+              <option value="ACTIVE">ACTIVE</option>
+              <option value="CREATED">CREATED</option>
+              <option value="FAILED">FAILED</option>
+              <option value="PARTIALLY_REFUNDED">PARTIALLY_REFUNDED</option>
+              <option value="REFUNDED">REFUNDED</option>
+            </select>
+          </div>
+
+          {/* Reset Filters */}
+          {hasActiveFilters && (
+            <button
+              onClick={handleResetFilters}
+              className="px-2.5 py-2 rounded-lg border border-[var(--border)] text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-slate-800 transition flex items-center gap-1"
+              title="Reset all filters"
+            >
+              <X className="w-3.5 h-3.5" />
+              Reset
+            </button>
+          )}
         </div>
       </div>
 
@@ -79,14 +267,14 @@ export function OrdersTableClient({ initialOrders }: OrdersTableClientProps) {
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--border)]">
-              {filteredOrders.length === 0 ? (
+              {paginatedOrders.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="py-8 text-center text-[var(--muted-foreground)]">
                     No matching orders found.
                   </td>
                 </tr>
               ) : (
-                filteredOrders.map((order) => (
+                paginatedOrders.map((order) => (
                   <tr
                     key={order.id}
                     onClick={() => setSelectedOrder(order)}
@@ -138,6 +326,97 @@ export function OrdersTableClient({ initialOrders }: OrdersTableClientProps) {
             </tbody>
           </table>
         </div>
+
+        {/* Pagination Toolbar */}
+        {totalItems > 0 && (
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 mt-2 border-t border-[var(--border)]">
+            <div className="flex items-center gap-4 text-xs text-[var(--muted-foreground)]">
+              <span>
+                Showing <strong className="text-[var(--foreground)]">{startIndex + 1}</strong> to{" "}
+                <strong className="text-[var(--foreground)]">{endIndex}</strong> of{" "}
+                <strong className="text-[var(--foreground)]">{totalItems}</strong> orders
+              </span>
+
+              <div className="flex items-center gap-1.5">
+                <span>Rows:</span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => handlePageSizeChange(Number(e.target.value))}
+                  aria-label="Rows per page"
+                  className="px-2 py-1 rounded bg-[var(--background)] border border-[var(--border)] text-xs text-[var(--foreground)] focus:outline-none focus:border-blue-500"
+                >
+                  <option value={10}>10</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1">
+              {/* First Page */}
+              <button
+                onClick={() => setCurrentPage(1)}
+                disabled={safeCurrentPage === 1}
+                title="First page"
+                aria-label="First page"
+                className="p-1.5 rounded-lg border border-[var(--border)] bg-[var(--background)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed transition"
+              >
+                <ChevronsLeft className="w-4 h-4" />
+              </button>
+
+              {/* Previous Page */}
+              <button
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={safeCurrentPage === 1}
+                title="Previous page"
+                aria-label="Previous page"
+                className="p-1.5 rounded-lg border border-[var(--border)] bg-[var(--background)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed transition"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+
+              {/* Page Number Buttons */}
+              <div className="flex items-center gap-1 mx-1">
+                {getPageNumbers().map((pageNum) => (
+                  <button
+                    key={pageNum}
+                    onClick={() => setCurrentPage(pageNum)}
+                    className={`min-w-[32px] h-8 px-2 rounded-lg text-xs font-medium transition ${
+                      pageNum === safeCurrentPage
+                        ? "bg-blue-600 text-white shadow-sm"
+                        : "border border-[var(--border)] bg-[var(--background)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-slate-800"
+                    }`}
+                  >
+                    {pageNum}
+                  </button>
+                ))}
+              </div>
+
+              {/* Next Page */}
+              <button
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={safeCurrentPage === totalPages || totalItems === 0}
+                title="Next page"
+                aria-label="Next page"
+                className="p-1.5 rounded-lg border border-[var(--border)] bg-[var(--background)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed transition"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+
+              {/* Last Page */}
+              <button
+                onClick={() => setCurrentPage(totalPages)}
+                disabled={safeCurrentPage === totalPages || totalItems === 0}
+                title="Last page"
+                aria-label="Last page"
+                className="p-1.5 rounded-lg border border-[var(--border)] bg-[var(--background)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed transition"
+              >
+                <ChevronsRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Slide-over Drawer */}

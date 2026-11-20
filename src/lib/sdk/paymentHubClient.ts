@@ -174,7 +174,8 @@ export class PaymentHubClient {
         // @ts-ignore - dynamic import for browser environment
         const cashfreeModule = await import("@cashfreepayments/cashfree-js").catch(() => null);
         if (cashfreeModule && cashfreeModule.load) {
-          const cashfree = await cashfreeModule.load({ mode: "sandbox" });
+          const sdkMode = data.mode || data.environment || "sandbox";
+          const cashfree = await cashfreeModule.load({ mode: sdkMode });
           const result = await cashfree.checkout({
             paymentSessionId,
             redirectTarget: "_modal",

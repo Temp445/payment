@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { CashfreeAdapter } from "@/lib/cashfree";
 import { AuthenticatedApp } from "@/lib/auth";
 import { logger } from "@/lib/logger";
+import { getCachedCashfreeConfig } from "@/lib/config";
 import { SubscriptionService } from "./subscription.service";
 
 export interface CreateOrderInput {
@@ -51,6 +52,9 @@ export class OrderService {
     });
 
     if (existingOrder && existingOrder.paymentSessionId) {
+      const { isProd } = getCachedCashfreeConfig();
+      const mode = isProd ? "production" : "sandbox";
+
       return {
         success: true,
         isExisting: true,
@@ -60,6 +64,8 @@ export class OrderService {
         checkout_url: this.checkoutUrl(hubOrigin, existingOrder.paymentSessionId),
         order_status: existingOrder.orderStatus,
         order_amount: Number(existingOrder.orderAmount),
+        environment: mode,
+        mode: mode,
       };
     }
 
@@ -138,6 +144,9 @@ export class OrderService {
 
     logger.info(`Order created successfully: ${cfOrderId} for ${app.appCode}`);
 
+    const { isProd } = getCachedCashfreeConfig();
+    const mode = isProd ? "production" : "sandbox";
+
     return {
       success: true,
       order_id: input.order_id,
@@ -146,6 +155,8 @@ export class OrderService {
       checkout_url: paymentSessionId ? this.checkoutUrl(hubOrigin, paymentSessionId) : undefined,
       order_status: "ACTIVE",
       order_amount: input.order_amount,
+      environment: mode,
+      mode: mode,
     };
   }
 
@@ -283,6 +294,7 @@ export class OrderService {
       },
       select: {
         id: true,
+        applicationId: true,
         appOrderId: true,
         cfOrderId: true,
         orderStatus: true,
@@ -363,6 +375,7 @@ export class OrderService {
                   offerPeriodType: metadata.offer_period_type || "month",
                   organizationId: metadata.organization_id,
                   userId: metadata.user_id || undefined,
+                  applicationId: order.applicationId,
                 });
                 logger.info(`Subscription auto-activated for organization ${metadata.organization_id}`);
               } catch (subErr: any) {

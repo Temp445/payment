@@ -106,11 +106,11 @@ npm install @cashfreepayments/cashfree-js
 
 ### Step 2: Configure Environment Variables
 Add to your ".env" file:
-VITE_PAYMENT_HUB_URL="http://localhost:3001/api/v1"
+VITE_PAYMENT_HUB_URL="https://acepaymenthub.netlify.app/api/v1"
 VITE_PAYMENT_HUB_CLIENT_ID="<YOUR_PUBLIC_CLIENT_ID>"
 
 ### Step 3: Create Hook (src/hooks/usePaymentHub.ts)
-Create "src/hooks/usePaymentHub.ts" with Cashfree dropin modal support, payment polling, and error handling.
+Create "src/hooks/usePaymentHub.ts" with dynamic mode detection, Cashfree dropin modal support, payment polling, and error handling.
 
 ### Step 4: Add <CheckoutButton />
 Create "src/components/CheckoutButton.tsx" to trigger payments effortlessly without backend servers.`;
@@ -121,14 +121,14 @@ const NEXTJS_AI_AGENT_PROMPT = `You are an expert Next.js developer. Integrate C
 npm install @cashfreepayments/cashfree-js
 
 ### Step 2: Configure Environment Variables (.env.local)
-NEXT_PUBLIC_PAYMENT_HUB_URL="http://localhost:3001/api/v1"
+NEXT_PUBLIC_PAYMENT_HUB_URL="https://acepaymenthub.netlify.app/api/v1"
 NEXT_PUBLIC_PAYMENT_HUB_CLIENT_ID="<YOUR_PUBLIC_CLIENT_ID>"
 
 ### Step 3: Create Hook (hooks/usePaymentHub.ts)
 "use client";
 import { useState } from "react";
 import { load } from "@cashfreepayments/cashfree-js";
-// Handles payment initiation, Cashfree drop-in popup, and status polling.`;
+// Handles payment initiation, dynamic mode detection, Cashfree drop-in popup, auto-prewarm, and status polling.`;
 
 const CLIENT_SDK_CODE = `/**
  * Universal Payment Hub Client SDK (paymentHubClient.ts)
@@ -137,7 +137,7 @@ const CLIENT_SDK_CODE = `/**
 import { load } from "@cashfreepayments/cashfree-js";
 
 export interface HubConfig {
-  hubUrl: string;       // e.g. "http://localhost:3001/api/v1"
+  hubUrl: string;       // e.g. "https://acepaymenthub.netlify.app/api/v1"
   clientId: string;     // e.g. "pub_live_payroll_..."
 }
 
@@ -206,8 +206,9 @@ export class PaymentHubClient {
       throw new Error(orderData.error || "Order creation failed");
     }
 
-    // B. Launch Cashfree Drop-in (use mode: "production" when going live)
-    const cashfree = await load({ mode: "sandbox" });
+    // B. Launch Cashfree Drop-in with dynamic mode detection returned by Payment Hub
+    const sdkMode = orderData.mode || orderData.environment || "sandbox";
+    const cashfree = await load({ mode: sdkMode as any });
     const result = await cashfree.checkout({
       paymentSessionId: orderData.payment_session_id,
       redirectTarget: "_modal"
@@ -1188,7 +1189,7 @@ export default function GuidePage() {
                     step: 4,
                     title: "Configure Environment Variables in App",
                     desc: "Add your Central Payment Hub endpoint and public Client ID to your app's .env file.",
-                    code: `VITE_PAYMENT_HUB_URL="http://localhost:3001/api/v1"\nVITE_PAYMENT_HUB_CLIENT_ID="pub_live_..."`,
+                    code: `VITE_PAYMENT_HUB_URL="https://acepaymenthub.netlify.app/api/v1"\nVITE_PAYMENT_HUB_CLIENT_ID="pub_live_..."`,
                   },
                   {
                     step: 5,
@@ -1465,7 +1466,7 @@ export function usePaymentHub() {
     setLoading(true);
     setError(null);
 
-    const hubUrl = import.meta.env.VITE_PAYMENT_HUB_URL || "http://localhost:3001/api/v1";
+    const hubUrl = import.meta.env.VITE_PAYMENT_HUB_URL || "https://acepaymenthub.netlify.app/api/v1";
     const clientId = import.meta.env.VITE_PAYMENT_HUB_CLIENT_ID;
 
     try {
@@ -1607,7 +1608,7 @@ export function CheckoutButton({
                   <CodeBlock
                     title="1. Configure React Environment (.env)"
                     filePath=".env"
-                    code={`# Central Payment Hub Client Configuration\nVITE_PAYMENT_HUB_URL="http://localhost:3001/api/v1"\nVITE_PAYMENT_HUB_CLIENT_ID="<YOUR_PUBLIC_CLIENT_ID>"`}
+                    code={`# Central Payment Hub Client Configuration\nVITE_PAYMENT_HUB_URL="https://acepaymenthub.netlify.app/api/v1"\nVITE_PAYMENT_HUB_CLIENT_ID="<YOUR_PUBLIC_CLIENT_ID>"`}
                   />
                   <CodeBlock
                     title="2. Check License from React using Universal SDK"
@@ -1647,7 +1648,7 @@ export async function hasProAccess(orgId: string): Promise<boolean> {
                 <CodeBlock
                   title="1. Configure React Environment (.env)"
                   filePath=".env"
-                  code={`# Central Payment Hub Client Configuration\nVITE_PAYMENT_HUB_URL="http://localhost:3001/api/v1"\nVITE_PAYMENT_HUB_CLIENT_ID="<YOUR_PUBLIC_CLIENT_ID>"`}
+                  code={`# Central Payment Hub Client Configuration\nVITE_PAYMENT_HUB_URL="https://acepaymenthub.netlify.app/api/v1"\nVITE_PAYMENT_HUB_CLIENT_ID="<YOUR_PUBLIC_CLIENT_ID>"`}
                 />
 
                 <CodeBlock
@@ -1674,7 +1675,7 @@ export function usePaymentHub() {
     setLoading(true);
     setError(null);
 
-    const hubUrl = import.meta.env.VITE_PAYMENT_HUB_URL || "http://localhost:3001/api/v1";
+    const hubUrl = import.meta.env.VITE_PAYMENT_HUB_URL || "https://acepaymenthub.netlify.app/api/v1";
     const clientId = import.meta.env.VITE_PAYMENT_HUB_CLIENT_ID;
 
     try {
@@ -1799,7 +1800,7 @@ export function CheckoutButton({ amount = 5000 }: { amount?: number }) {
                   <CodeBlock
                     title="1. Next.js .env.local (Only 2 Public Variables)"
                     filePath=".env.local"
-                    code={`NEXT_PUBLIC_PAYMENT_HUB_URL="http://localhost:3001/api/v1"\nNEXT_PUBLIC_PAYMENT_HUB_CLIENT_ID="<YOUR_PUBLIC_CLIENT_ID>"`}
+                    code={`NEXT_PUBLIC_PAYMENT_HUB_URL="https://acepaymenthub.netlify.app/api/v1"\nNEXT_PUBLIC_PAYMENT_HUB_CLIENT_ID="<YOUR_PUBLIC_CLIENT_ID>"`}
                   />
 
                   <CodeBlock
@@ -1827,7 +1828,7 @@ export function usePaymentHub() {
     setLoading(true);
     setError(null);
 
-    const hubUrl = process.env.NEXT_PUBLIC_PAYMENT_HUB_URL || "http://localhost:3001/api/v1";
+    const hubUrl = process.env.NEXT_PUBLIC_PAYMENT_HUB_URL || "https://acepaymenthub.netlify.app/api/v1";
     const clientId = process.env.NEXT_PUBLIC_PAYMENT_HUB_CLIENT_ID;
 
     try {
@@ -1885,7 +1886,7 @@ export function usePaymentHub() {
                     <CodeBlock
                       title="Next.js Full-Stack Environment"
                       filePath=".env.local"
-                      code={`# Client-accessible URL\nNEXT_PUBLIC_PAYMENT_HUB_URL="http://localhost:3001/api/v1"\n\n# Server-only credentials (Never exposed to browser)\nPAYMENT_HUB_CLIENT_ID="pub_live_nextapp_xxxx"\nPAYMENT_HUB_CLIENT_SECRET="sec_live_nextapp_xxxx"\nPAYMENT_HUB_WEBHOOK_SECRET="whsec_nextapp_xxxx"`}
+                      code={`# Client-accessible URL\nNEXT_PUBLIC_PAYMENT_HUB_URL="https://acepaymenthub.netlify.app/api/v1"\n\n# Server-only credentials (Never exposed to browser)\nPAYMENT_HUB_CLIENT_ID="pub_live_nextapp_xxxx"\nPAYMENT_HUB_CLIENT_SECRET="sec_live_nextapp_xxxx"\nPAYMENT_HUB_WEBHOOK_SECRET="whsec_nextapp_xxxx"`}
                     />
                   </div>
 

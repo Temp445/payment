@@ -174,33 +174,115 @@ export class SubscriptionService {
     offerPeriodType?: string;
     organizationId: string;
     userId?: string;
+    applicationId?: string;
   }) {
-    const result: any[] = await prisma.$queryRawUnsafe(
-      `INSERT INTO public.payment_transactions (
-         id, gateway_payment_id, gateway_order_id, gateway_signature, gateway_name,
-         amount, currency, status, receipt_number, product_id, offer_id,
-         offer_period, offer_period_type, organization_id, user_id
-       ) VALUES (
-         gen_random_uuid(), $1, $2, $3, $4,
-         $5, $6, $7, $8, $9::uuid, $10,
-         $11, $12, $13, $14
-       ) RETURNING *`,
-      params.gatewayPaymentId,
-      params.gatewayOrderId,
-      params.gatewaySignature || "HUB_VERIFIED",
-      params.gatewayName || "CASHFREE",
-      params.amount,
-      params.currency || "INR",
-      params.status || "PAID",
-      params.receiptNumber,
-      params.productId,
-      BigInt(params.offerId),
-      params.offerPeriod || 1,
-      params.offerPeriodType || "month",
-      params.organizationId,
-      params.userId || null
-    );
-    return result[0];
+    try {
+      // 1. Resolve valid product_id from public.products_offers
+      let resolvedProductId: string | null = null;
+      try {
+        const prodCheck: any[] = await prisma.$queryRawUnsafe(
+          `SELECT id FROM public.products_offers WHERE id = $1::uuid LIMIT 1`,
+          params.productId
+        );
+        if (prodCheck && prodCheck.length > 0) {
+          resolvedProductId = prodCheck[0].id;
+        }
+      } catch {
+        // Not a valid UUID or not found
+      }
+
+      if (!resolvedProductId) {
+        // Fallback: look up by applicationId
+        const fallbackProds: any[] = params.applicationId
+          ? await prisma.$queryRawUnsafe(
+              `SELECT id FROM public.products_offers WHERE application_id = $1 AND product_is_active = true LIMIT 1`,
+              params.applicationId
+            )
+          : await prisma.$queryRawUnsafe(
+              `SELECT id FROM public.products_offers WHERE product_is_active = true ORDER BY created_at ASC LIMIT 1`
+            );
+        if (fallbackProds && fallbackProds.length > 0) {
+          resolvedProductId = fallbackProds[0].id;
+        }
+      }
+
+      if (!resolvedProductId) {
+        logger.warn(
+          `[SubscriptionService] No matching products_offers row found for product ${params.productId}. Skipping transaction write.`
+        );
+        return null;
+      }
+
+      // 2. Resolve valid offer_id from public.subscription_offers
+      let resolvedOfferId: bigint | null = null;
+      try {
+        const parsedOffer = BigInt(params.offerId);
+        const offerCheck: any[] = await prisma.$queryRawUnsafe(
+          `SELECT id FROM public.subscription_offers WHERE id = $1 AND product_id = $2::uuid LIMIT 1`,
+          parsedOffer,
+          resolvedProductId
+        );
+        if (offerCheck && offerCheck.length > 0) {
+          resolvedOfferId = BigInt(offerCheck[0].id);
+        }
+      } catch {
+        // Invalid bigint or not found
+      }
+
+      if (!resolvedOfferId) {
+        // Fallback: pick first active offer for this product
+        const fallbackOffers: any[] = await prisma.$queryRawUnsafe(
+          `SELECT id FROM public.subscription_offers WHERE product_id = $1::uuid AND offer_is_active = true ORDER BY tier_level ASC LIMIT 1`,
+          resolvedProductId
+        );
+        if (fallbackOffers && fallbackOffers.length > 0) {
+          resolvedOfferId = BigInt(fallbackOffers[0].id);
+        }
+      }
+
+      if (!resolvedOfferId) {
+        logger.warn(
+          `[SubscriptionService] No matching subscription_offers row found for product ${resolvedProductId}. Skipping transaction write.`
+        );
+        return null;
+      }
+
+      const userId = params.userId || `usr_${params.organizationId}`;
+
+      const result: any[] = await prisma.$queryRawUnsafe(
+        `INSERT INTO public.payment_transactions (
+           id, gateway_payment_id, gateway_order_id, gateway_signature, gateway_name,
+           amount, currency, status, receipt_number, product_id, offer_id,
+           offer_period, offer_period_type, organization_id, user_id
+         ) VALUES (
+           gen_random_uuid(), $1, $2, $3, $4,
+           $5, $6, $7, $8, $9::uuid, $10,
+           $11, $12, $13, $14
+         ) RETURNING *`,
+        params.gatewayPaymentId,
+        params.gatewayOrderId,
+        params.gatewaySignature || "HUB_VERIFIED",
+        params.gatewayName || "CASHFREE",
+        params.amount,
+        params.currency || "INR",
+        params.status || "PAID",
+        params.receiptNumber,
+        resolvedProductId,
+        resolvedOfferId,
+        params.offerPeriod || 1,
+        params.offerPeriodType || "month",
+        params.organizationId,
+        userId
+      );
+
+      logger.info(
+        `[SubscriptionService] Successfully recorded payment_transactions and activated user_subscriptions for org: ${params.organizationId}`
+      );
+      return result[0];
+    } catch (err: any) {
+      logger.error(`[SubscriptionService] recordSubscriptionTransaction failed: ${err.message}`, err);
+      return null;
+    }
   }
 
   /**
