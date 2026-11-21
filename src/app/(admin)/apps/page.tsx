@@ -678,16 +678,7 @@ export default function ApplicationsPage() {
                       </div>
                     )}
                   </div>
-                  <div className="flex items-center gap-3">
-                    <label className="text-[var(--muted-foreground)] font-medium">Brand Colour</label>
-                    <input
-                      type="color"
-                      value={editBrandColor || "#2563eb"}
-                      onChange={(e) => setEditBrandColor(e.target.value)}
-                      className="h-8 w-12 rounded border border-[var(--border)] bg-transparent"
-                    />
-                    <span className="font-mono text-[11px] text-[var(--muted-foreground)]">{editBrandColor || "#2563eb (default)"}</span>
-                  </div>
+                  {/* Brand Colour hidden as requested */}
                 </div>
 
                 {/* Status Toggle */}
