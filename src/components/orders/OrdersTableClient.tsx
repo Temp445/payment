@@ -338,7 +338,7 @@ export function OrdersTableClient({ initialOrders }: OrdersTableClientProps) {
                 <th className="pb-3 font-semibold">App Code</th>
                 <th className="pb-3 font-semibold">Customer</th>
                 <th className="pb-3 font-semibold">Amount</th>
-                <th className="pb-3 font-semibold">Env</th>
+                {/* <th className="pb-3 font-semibold">Env</th> */}
                 <th className="pb-3 font-semibold">Status</th>
                 <th className="pb-3 font-semibold">Created At</th>
                 <th className="pb-3 font-semibold text-right">Action</th>
@@ -380,7 +380,7 @@ export function OrdersTableClient({ initialOrders }: OrdersTableClientProps) {
                     <td className="py-3 font-semibold text-[var(--foreground)]">
                       {formatCurrency(order.orderAmount)}
                     </td>
-                    <td className="py-3">
+                    {/* <td className="py-3">
                       {getOrderEnvironment(order) === "production" ? (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
@@ -392,7 +392,7 @@ export function OrdersTableClient({ initialOrders }: OrdersTableClientProps) {
                           SANDBOX
                         </span>
                       )}
-                    </td>
+                    </td> */}
                     {(() => {
                       const display = getOrderDisplayStatus(order);
                       const canRefund =

@@ -293,7 +293,7 @@ export default async function OverviewPage() {
                 <th className="pb-3 font-semibold">Application</th>
                 <th className="pb-3 font-semibold">Customer</th>
                 <th className="pb-3 font-semibold">Amount</th>
-                <th className="pb-3 font-semibold">Env</th>
+                {/* <th className="pb-3 font-semibold">Env</th> */}
                 <th className="pb-3 font-semibold">Status</th>
                 <th className="pb-3 font-semibold">Date</th>
               </tr>
@@ -325,7 +325,7 @@ export default async function OverviewPage() {
                       <td className="py-3 font-semibold text-[var(--foreground)]">
                         {formatCurrency(order.orderAmount)}
                       </td>
-                      <td className="py-3">
+                      {/* <td className="py-3">
                         {isLive ? (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
@@ -337,7 +337,7 @@ export default async function OverviewPage() {
                             SANDBOX
                           </span>
                         )}
-                      </td>
+                      </td> */}
                       <td className="py-3">
                         <StatusBadge status={display.badgeStatus}>
                           {display.label}
