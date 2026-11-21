@@ -44,9 +44,115 @@ export class WebhookService {
       return { success: false, status: 400, message: "Malformed JSON payload" };
     }
 
-    const eventType = event.type; // e.g. PAYMENT_SUCCESS_WEBHOOK, PAYMENT_FAILED_WEBHOOK
+    const eventType = event.type; // e.g. PAYMENT_SUCCESS_WEBHOOK, PAYMENT_FAILED_WEBHOOK, REFUND_STATUS_WEBHOOK
     const orderData = event.data?.order;
     const paymentData = event.data?.payment;
+    const refundData = event.data?.refund;
+
+    // Handle Refund Webhooks (e.g. REFUND_STATUS_WEBHOOK)
+    if (eventType === "REFUND_STATUS_WEBHOOK" || refundData) {
+      const cfOrderId = refundData?.order_id || orderData?.order_id;
+      if (!cfOrderId) {
+        logger.warn("Refund webhook payload missing order_id", event);
+        return { success: true, message: "Ignored unhandled refund event" };
+      }
+
+      const order = await prisma.order.findUnique({
+        where: { cfOrderId },
+        include: { application: true, refunds: true },
+      });
+
+      if (!order) {
+        logger.warn(`Order not found for refund webhook: ${cfOrderId}`);
+        return { success: true, message: "Order not found" };
+      }
+
+      const cfRefundStatus = refundData.refund_status; // 'SUCCESS', 'FAILED', 'PENDING'
+      const statusMapped =
+        cfRefundStatus === "SUCCESS"
+          ? "SUCCESS"
+          : cfRefundStatus === "FAILED"
+          ? "FAILED"
+          : "PENDING";
+
+      const matchedRefund = order.refunds.find(
+        (r) =>
+          r.cfRefundId === refundData.refund_id ||
+          r.cfRefundId === String(refundData.cf_refund_id)
+      );
+
+      if (matchedRefund) {
+        await prisma.refund.update({
+          where: { id: matchedRefund.id },
+          data: {
+            refundStatus: statusMapped,
+            rawResponse: event,
+          },
+        });
+      }
+
+      // Recompute total successful refunds
+      const updatedRefunds = await prisma.refund.findMany({
+        where: { orderId: order.id, refundStatus: "SUCCESS" },
+      });
+      const totalRefunded = updatedRefunds.reduce(
+        (sum, r) => sum + Number(r.refundAmount),
+        0
+      );
+      const totalPaid = Number(order.orderAmount);
+
+      let newOrderStatus = order.orderStatus;
+      if (totalRefunded >= totalPaid && totalPaid > 0) {
+        newOrderStatus = "REFUNDED";
+      } else if (totalRefunded > 0) {
+        newOrderStatus = "PARTIALLY_REFUNDED";
+      } else if (order.orderStatus === "REFUNDED" && statusMapped === "PENDING") {
+        newOrderStatus = "PAID";
+      }
+
+      if (newOrderStatus !== order.orderStatus) {
+        await prisma.order.update({
+          where: { id: order.id },
+          data: { orderStatus: newOrderStatus },
+        });
+      }
+
+      // Enqueue Outbox notification to client app
+      if (order.application.webhookUrl) {
+        await prisma.webhookOutboxQueue.create({
+          data: {
+            applicationId: order.applicationId,
+            orderId: order.id,
+            eventType: `REFUND.${statusMapped}`,
+            payload: {
+              event_type: `REFUND.${statusMapped}`,
+              app_code: order.application.appCode,
+              order_id: order.appOrderId,
+              cf_order_id: order.cfOrderId,
+              refund_id: refundData.refund_id || refundData.cf_refund_id,
+              refund_amount: Number(refundData.refund_amount || 0),
+              refund_status: statusMapped,
+              order_status: newOrderStatus,
+              timestamp: new Date().toISOString(),
+            },
+            status: "PENDING",
+          },
+        });
+
+        OutboxWorker.processBatch(5).catch(() => {});
+      }
+
+      logger.info(
+        `Refund webhook processed for order ${cfOrderId}: ${statusMapped}`
+      );
+
+      return {
+        success: true,
+        status: 200,
+        order_id: order.appOrderId,
+        refund_status: statusMapped,
+      };
+    }
 
     if (!orderData?.order_id || !paymentData?.cf_payment_id) {
       logger.warn("Webhook payload missing order_id or cf_payment_id", event);

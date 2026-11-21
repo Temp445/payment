@@ -211,24 +211,93 @@ export class CashfreeAdapter {
   }
 
   /**
+   * Fetch a specific refund from Cashfree API
+   */
+  static async getOrderRefund(cfOrderId: string, cfRefundId: string) {
+    try {
+      const { baseUrl, appId, secretKey } = await this.ensureConfigured();
+      const response = await axios.get(
+        `${baseUrl}/orders/${cfOrderId}/refunds/${cfRefundId}`,
+        {
+          headers: {
+            "x-client-id": appId,
+            "x-client-secret": secretKey,
+            "x-api-version": this.getApiVersion(),
+          },
+        }
+      );
+      return response.data;
+    } catch (error: any) {
+      logger.error("CashfreeAdapter.getOrderRefund failed", error?.response?.data || error);
+      throw new Error(
+        error?.response?.data?.message || "Failed to fetch Cashfree refund details"
+      );
+    }
+  }
+
+  /**
+   * Fetch all refunds for an order from Cashfree API
+   */
+  static async getOrderRefunds(cfOrderId: string) {
+    try {
+      const { baseUrl, appId, secretKey } = await this.ensureConfigured();
+      const response = await axios.get(
+        `${baseUrl}/orders/${cfOrderId}/refunds`,
+        {
+          headers: {
+            "x-client-id": appId,
+            "x-client-secret": secretKey,
+            "x-api-version": this.getApiVersion(),
+          },
+        }
+      );
+      return response.data;
+    } catch (error: any) {
+      logger.error("CashfreeAdapter.getOrderRefunds failed", error?.response?.data || error);
+      return [];
+    }
+  }
+
+  /**
    * Fetch settlement batches directly from Cashfree Settlements API
    */
-  static async fetchSettlements(limit = 20) {
+  static async fetchSettlements(
+    limit = 20,
+    options?: { startDate?: Date; endDate?: Date }
+  ) {
     try {
       const { appId, secretKey, baseUrl } = await this.ensureConfigured();
-      const response = await axios.get(`${baseUrl}/settlements`, {
-        headers: {
-          "x-client-id": appId,
-          "x-client-secret": secretKey,
-          "x-api-version": this.getApiVersion(),
+
+      const endDate = options?.endDate || new Date();
+      const startDate =
+        options?.startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+      const formattedStartDate = startDate.toISOString().split(".")[0] + "Z";
+      const formattedEndDate = endDate.toISOString().split(".")[0] + "Z";
+
+      const response = await axios.post(
+        `${baseUrl}/settlements`,
+        {
+          pagination: { limit },
+          filters: {
+            start_date: formattedStartDate,
+            end_date: formattedEndDate,
+          },
         },
-        params: { limit },
-      });
+        {
+          headers: {
+            "Content-Type": "application/json",
+            "x-client-id": appId,
+            "x-client-secret": secretKey,
+            "x-api-version": this.getApiVersion(),
+          },
+        }
+      );
       return response.data;
     } catch (error: any) {
       logger.error("CashfreeAdapter.fetchSettlements failed", error?.response?.data || error);
       throw new Error(
-        error?.response?.data?.message || "Failed to fetch Cashfree settlements"
+        error?.response?.data?.message || error?.message || "Failed to fetch Cashfree settlements"
       );
     }
   }

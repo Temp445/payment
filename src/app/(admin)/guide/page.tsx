@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { Header } from "@/components/layout/Header";
 import {
   Code2,
@@ -98,7 +98,17 @@ function CodeBlock({ title, code, filePath, language = "typescript" }: CodeBlock
 // PROMPT & SNIPPET CONSTANTS
 // ============================================================================
 
-const REACT_AI_AGENT_PROMPT = `You are an expert React / Vite frontend developer. Integrate Central Payment Hub checkout and licensing into this React application by following these instructions step-by-step:
+function getReactAiPrompt(hubOrigin: string) {
+  const cleanOrigin = hubOrigin.replace(/\/$/, "");
+  const guideUrl = `${cleanOrigin}/guide`;
+  const apiUrl = `${cleanOrigin}/api/v1`;
+
+  return `You are an expert React / Vite frontend developer. Integrate Central Payment Hub checkout and licensing into this React application by following these instructions step-by-step:
+
+### Official Guide & Reference Documentation
+• Integration Guide URL: ${guideUrl}
+• Central Payment Hub API Base URL: ${apiUrl}
+• Cashfree Drop-in Checkout Docs: ${guideUrl}#dropin-vs-hosted
 
 ### Step 1: Install Cashfree Web SDK
 Run in terminal:
@@ -106,29 +116,50 @@ npm install @cashfreepayments/cashfree-js
 
 ### Step 2: Configure Environment Variables
 Add to your ".env" file:
-VITE_PAYMENT_HUB_URL="https://acepaymenthub.netlify.app/api/v1"
+VITE_PAYMENT_HUB_URL="${apiUrl}"
 VITE_PAYMENT_HUB_CLIENT_ID="<YOUR_PUBLIC_CLIENT_ID>"
 
 ### Step 3: Create Hook (src/hooks/usePaymentHub.ts)
-Create "src/hooks/usePaymentHub.ts" with dynamic mode detection, Cashfree dropin modal support, payment polling, and error handling.
+Create "src/hooks/usePaymentHub.ts" with dynamic mode detection, Cashfree dropin modal support, payment polling, and error handling. (Reference complete code at: ${guideUrl}#react-vite)
 
 ### Step 4: Add <CheckoutButton />
-Create "src/components/CheckoutButton.tsx" to trigger payments effortlessly without backend servers.`;
+Create "src/components/CheckoutButton.tsx" to trigger payments effortlessly without backend servers. (Reference complete code at: ${guideUrl}#react-vite)
 
-const NEXTJS_AI_AGENT_PROMPT = `You are an expert Next.js developer. Integrate Central Payment Hub checkout into this Next.js application by following these instructions step-by-step:
+### Step 5: Verify Whitelisting
+Ensure your client frontend domain (e.g. http://localhost:5173 or your production domain) is whitelisted in Cashfree Merchant Dashboard under Developers > Whitelisting.`;
+}
+
+function getNextJsAiPrompt(hubOrigin: string) {
+  const cleanOrigin = hubOrigin.replace(/\/$/, "");
+  const guideUrl = `${cleanOrigin}/guide`;
+  const apiUrl = `${cleanOrigin}/api/v1`;
+
+  return `You are an expert Next.js developer. Integrate Central Payment Hub checkout into this Next.js application by following these instructions step-by-step:
+
+### Official Guide & Reference Documentation
+• Integration Guide URL: ${guideUrl}
+• Central Payment Hub API Base URL: ${apiUrl}
+• Next.js App Router Architecture: ${guideUrl}#nextjs-app-router
 
 ### Step 1: Install Cashfree SDK
 npm install @cashfreepayments/cashfree-js
 
 ### Step 2: Configure Environment Variables (.env.local)
-NEXT_PUBLIC_PAYMENT_HUB_URL="https://acepaymenthub.netlify.app/api/v1"
+NEXT_PUBLIC_PAYMENT_HUB_URL="${apiUrl}"
 NEXT_PUBLIC_PAYMENT_HUB_CLIENT_ID="<YOUR_PUBLIC_CLIENT_ID>"
 
 ### Step 3: Create Hook (hooks/usePaymentHub.ts)
 "use client";
 import { useState } from "react";
 import { load } from "@cashfreepayments/cashfree-js";
-// Handles payment initiation, dynamic mode detection, Cashfree drop-in popup, auto-prewarm, and status polling.`;
+// Handles payment initiation, dynamic mode detection, Cashfree drop-in popup, auto-prewarm, and status polling. Reference full architecture at: ${guideUrl}#nextjs-app-router
+
+### Step 4: Add Checkout Action / Button
+Create a client component calling usePaymentHub() to initiate session and trigger Cashfree drop-in modal.
+
+### Step 5: Verify Whitelisting
+Ensure your frontend domain (e.g. http://localhost:3000 or production domain) is added to Cashfree Merchant Dashboard under Developers > Whitelisting.`;
+}
 
 const CLIENT_SDK_CODE = `/**
  * Universal Payment Hub Client SDK (paymentHubClient.ts)
@@ -764,6 +795,16 @@ export default function GuidePage() {
   const [reactSubTab, setReactSubTab] = useState<"supabase" | "pure">("supabase");
   const [nextjsSubTab, setNextjsSubTab] = useState<"fullstack" | "client">("fullstack");
   const [mobileDocsNavOpen, setMobileDocsNavOpen] = useState(false);
+  const [currentOrigin, setCurrentOrigin] = useState("https://acepaymenthub.netlify.app");
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.location.origin) {
+      setCurrentOrigin(window.location.origin);
+    }
+  }, []);
+
+  const reactAiPrompt = useMemo(() => getReactAiPrompt(currentOrigin), [currentOrigin]);
+  const nextjsAiPrompt = useMemo(() => getNextJsAiPrompt(currentOrigin), [currentOrigin]);
 
   const toggleCategory = (catTitle: string) => {
     setCollapsedCategories((prev) => ({
@@ -2252,26 +2293,32 @@ x-client-id: pub_live_payroll_d42a8b9e...
           {/* =============================================================== */}
           {(activeSection === "ai-prompt-react" || activeSection === "ai-prompt-nextjs") && (
             <div className="space-y-6 animate-in fade-in duration-200">
-              <div className="space-y-1 border-b border-slate-800 pb-4">
+              <div className="space-y-2 border-b border-slate-800 pb-4">
                 <div className="flex items-center gap-2 text-xs text-blue-400 font-semibold uppercase tracking-wider">
                   <span>AI Tools</span>
                   <ChevronRight className="w-3 h-3 text-slate-600" />
                   <span>Auto-Integration Prompts</span>
                 </div>
-                <h2 className="text-2xl font-extrabold text-white">One-Shot AI Coding Assistant Prompts</h2>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <h2 className="text-2xl font-extrabold text-white">One-Shot AI Coding Assistant Prompts</h2>
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono bg-blue-500/10 text-blue-300 border border-blue-500/20">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span>Domain: {currentOrigin}</span>
+                  </div>
+                </div>
                 <p className="text-xs text-slate-400">
-                  Copy and paste directly into Cursor, Antigravity, Copilot, or Claude Code.
+                  Copy and paste directly into Cursor, Antigravity, Copilot, or Claude Code. The guide URL (<code className="text-blue-300">{currentOrigin}/guide</code>) and API endpoint (<code className="text-blue-300">{currentOrigin}/api/v1</code>) are automatically attached based on your current domain.
                 </p>
               </div>
 
               <CodeBlock
                 title="One-Shot React Auto-Integration Prompt"
-                code={REACT_AI_AGENT_PROMPT}
+                code={reactAiPrompt}
               />
 
               <CodeBlock
                 title="One-Shot Next.js Auto-Integration Prompt"
-                code={NEXTJS_AI_AGENT_PROMPT}
+                code={nextjsAiPrompt}
               />
             </div>
           )}

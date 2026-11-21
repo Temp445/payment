@@ -72,8 +72,14 @@ export function ReconciliationClient({
 
       const data = await res.json();
       if (data.success) {
-        setMessage(`Settlements synced successfully! (${data.synced_count} records updated)`);
-        setTimeout(() => window.location.reload(), 1500);
+        if (data.synced_count === 0) {
+          setMessage(
+            "Cashfree API connected successfully. No settlement batches found yet (settlements are processed by Cashfree on T+1/T+2 banking cycles)."
+          );
+        } else {
+          setMessage(`Settlements synced successfully! (${data.synced_count} records updated)`);
+          setTimeout(() => window.location.reload(), 1500);
+        }
       } else {
         setMessage(`Sync failed: ${data.error || "Unknown error"}`);
       }

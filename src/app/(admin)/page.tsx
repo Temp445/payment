@@ -5,7 +5,7 @@ import { VolumeChart } from "@/components/dashboard/VolumeChart";
 import { MethodPieChart } from "@/components/dashboard/MethodPieChart";
 import { StatusBadge } from "@/components/ui/Badge";
 import { prisma } from "@/lib/prisma";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency, formatDate, getOrderDisplayStatus, getOrderEnvironment } from "@/lib/utils";
 import { DollarSign, Activity, Layers, Send } from "lucide-react";
 import Link from "next/link";
 import { OrderService } from "@/services/order.service";
@@ -15,6 +15,10 @@ export const dynamic = "force-dynamic";
 export default async function OverviewPage() {
   // Fetch real-time dashboard aggregates from Supabase via Prisma
   let totalVolume = 0;
+  let liveVolume = 0;
+  let sandboxVolume = 0;
+  let livePaidCount = 0;
+  let sandboxPaidCount = 0;
   let initiatedVolume = 0;
   let totalOrdersCount = 0;
   let paidOrdersCount = 0;
@@ -65,6 +69,7 @@ export default async function OverviewPage() {
         include: {
           application: { select: { appCode: true, appName: true } },
           payments: { select: { paymentMethod: true, cfPaymentId: true }, take: 1 },
+          refunds: { select: { refundStatus: true, refundAmount: true } },
         },
       }),
       prisma.payment.findMany({
@@ -78,14 +83,29 @@ export default async function OverviewPage() {
       prisma.order.findMany({
         where: {
           orderStatus: "PAID",
-          createdAt: { gte: sevenDaysAgo },
         },
         select: {
           orderAmount: true,
           createdAt: true,
+          metadata: true,
+          orderNote: true,
+          cfOrderId: true,
         },
       }),
     ]);
+
+    const allPaidOrders = recentPaidOrders;
+    allPaidOrders.forEach((order) => {
+      const env = getOrderEnvironment(order);
+      const amt = Number(order.orderAmount || 0);
+      if (env === "production") {
+        liveVolume += amt;
+        livePaidCount += 1;
+      } else {
+        sandboxVolume += amt;
+        sandboxPaidCount += 1;
+      }
+    });
 
     totalVolume = Number(volumeAgg._sum.orderAmount || 0);
     initiatedVolume = Number(initiatedAgg._sum.orderAmount || 0);
@@ -181,24 +201,20 @@ export default async function OverviewPage() {
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4">
         <StatCard
-          title="Total Processed GMV"
-          value={formatCurrency(totalVolume)}
+          title="Live Production Volume"
+          value={formatCurrency(liveVolume)}
           subtitle={
-            totalVolume > 0
-              ? "Lifetime paid revenue"
-              : initiatedVolume > 0
-              ? `${formatCurrency(initiatedVolume)} initiated (${totalOrdersCount} orders)`
-              : "No orders created yet"
+            livePaidCount > 0
+              ? `${livePaidCount} live orders paid`
+              : "No live transactions yet"
           }
           icon={DollarSign}
         />
         <StatCard
-          title="Success Rate"
-          value={successRate}
-          subtitle={`${paidOrdersCount} of ${totalOrdersCount} orders paid`}
+          title="Sandbox Test Volume"
+          value={formatCurrency(sandboxVolume)}
+          subtitle={`${sandboxPaidCount} test orders paid`}
           icon={Activity}
-          trend={successRateTrend}
-          trendPositive={successRatePositive}
         />
         <StatCard
           title="Active Tenant Apps"
@@ -277,6 +293,7 @@ export default async function OverviewPage() {
                 <th className="pb-3 font-semibold">Application</th>
                 <th className="pb-3 font-semibold">Customer</th>
                 <th className="pb-3 font-semibold">Amount</th>
+                <th className="pb-3 font-semibold">Env</th>
                 <th className="pb-3 font-semibold">Status</th>
                 <th className="pb-3 font-semibold">Date</th>
               </tr>
@@ -284,35 +301,54 @@ export default async function OverviewPage() {
             <tbody className="divide-y divide-[var(--border)]">
               {recentOrders.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-6 text-center text-[var(--muted-foreground)]">
+                  <td colSpan={7} className="py-6 text-center text-[var(--muted-foreground)]">
                     No transactions yet. Start by sending an order from APP001 or Website 01!
                   </td>
                 </tr>
               ) : (
-                recentOrders.map((order) => (
-                  <tr key={order.id} className="hover:bg-slate-800/40">
-                    <td className="py-3 font-mono font-medium text-[var(--foreground)]">
-                      {order.appOrderId}
-                    </td>
-                    <td className="py-3">
-                      <span className="font-semibold text-blue-400">
-                        {order.application?.appCode}
-                      </span>
-                    </td>
-                    <td className="py-3 text-[var(--muted-foreground)]">
-                      {order.customerPhone}
-                    </td>
-                    <td className="py-3 font-semibold text-[var(--foreground)]">
-                      {formatCurrency(order.orderAmount)}
-                    </td>
-                    <td className="py-3">
-                      <StatusBadge status={order.orderStatus} />
-                    </td>
-                    <td className="py-3 text-[var(--muted-foreground)]">
-                      {formatDate(order.createdAt)}
-                    </td>
-                  </tr>
-                ))
+                recentOrders.map((order) => {
+                  const display = getOrderDisplayStatus(order);
+                  const isLive = getOrderEnvironment(order) === "production";
+                  return (
+                    <tr key={order.id} className="hover:bg-slate-800/40">
+                      <td className="py-3 font-mono font-medium text-[var(--foreground)]">
+                        {order.appOrderId}
+                      </td>
+                      <td className="py-3">
+                        <span className="font-semibold text-blue-400">
+                          {order.application?.appCode}
+                        </span>
+                      </td>
+                      <td className="py-3 text-[var(--muted-foreground)]">
+                        {order.customerPhone}
+                      </td>
+                      <td className="py-3 font-semibold text-[var(--foreground)]">
+                        {formatCurrency(order.orderAmount)}
+                      </td>
+                      <td className="py-3">
+                        {isLive ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                            LIVE
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+                            SANDBOX
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-3">
+                        <StatusBadge status={display.badgeStatus}>
+                          {display.label}
+                        </StatusBadge>
+                      </td>
+                      <td className="py-3 text-[var(--muted-foreground)]">
+                        {formatDate(order.createdAt)}
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>

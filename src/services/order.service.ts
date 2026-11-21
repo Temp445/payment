@@ -71,6 +71,15 @@ export class OrderService {
     }
 
     // 2. Persist initial order in Supabase via Prisma (Status: CREATED)
+    const { isProd } = getCachedCashfreeConfig();
+    const currentMode = isProd ? "production" : "sandbox";
+    const orderMetadata = {
+      ...(typeof input.metadata === "object" && input.metadata !== null
+        ? input.metadata
+        : {}),
+      environment: currentMode,
+    };
+
     const orderRecord = await prisma.order.upsert({
       where: {
         applicationId_appOrderId: {
@@ -92,11 +101,12 @@ export class OrderService {
         orderNote: input.order_note,
         returnUrl: input.order_meta?.return_url,
         notifyUrl: input.order_meta?.notify_url,
-        metadata: input.metadata || {},
+        metadata: orderMetadata,
       },
       update: {
         orderAmount: input.order_amount,
         orderStatus: "CREATED",
+        metadata: orderMetadata,
       },
     });
 
@@ -145,9 +155,6 @@ export class OrderService {
 
     logger.info(`Order created successfully: ${cfOrderId} for ${app.appCode}`);
 
-    const { isProd } = getCachedCashfreeConfig();
-    const mode = isProd ? "production" : "sandbox";
-
     return {
       success: true,
       order_id: input.order_id,
@@ -156,8 +163,8 @@ export class OrderService {
       checkout_url: paymentSessionId ? this.checkoutUrl(hubOrigin, paymentSessionId) : undefined,
       order_status: "ACTIVE",
       order_amount: input.order_amount,
-      environment: mode,
-      mode: mode,
+      environment: currentMode,
+      mode: currentMode,
     };
   }
 

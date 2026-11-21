@@ -3,7 +3,7 @@
 import React, { useState, useMemo } from "react";
 import { StatusBadge } from "@/components/ui/Badge";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import { RotateCcw, Plus, AlertCircle, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
+import { RotateCcw, Plus, AlertCircle, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Clock } from "lucide-react";
 
 interface RefundsClientProps {
   initialRefunds: any[];
@@ -99,6 +99,20 @@ export function RefundsClient({ initialRefunds }: RefundsClientProps) {
           <Plus className="w-4 h-4" />
           Initiate Refund
         </button>
+      </div>
+
+      {/* Refund Turnaround Times (TAT) Info Banner */}
+      <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 text-xs text-slate-300 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-2 font-medium text-blue-400">
+          <Clock className="w-4 h-4 shrink-0" />
+          <span>Standard Refund Timelines (TAT):</span>
+        </div>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-slate-300">
+          <span>• <strong>UPI / Wallets:</strong> Instant to 24–48 hrs</span>
+          <span>• <strong>Net Banking:</strong> 2–4 business days</span>
+          <span>• <strong>Cards:</strong> 5–7 business days</span>
+          <span className="text-emerald-400">• <strong>Gateway:</strong> Instant Dispatch</span>
+        </div>
       </div>
 
       {/* Refunds Table */}
@@ -321,6 +335,23 @@ export function RefundsClient({ initialRefunds }: RefundsClientProps) {
                   onChange={(e) => setRefundNote(e.target.value)}
                   className="w-full px-3 py-2 rounded-lg bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)] focus:outline-none focus:border-blue-500"
                 />
+              </div>
+
+              {/* Estimated Refund Timelines (TAT) */}
+              <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-700/80 text-[11px] space-y-1.5 text-slate-300">
+                <div className="flex items-center gap-1.5 font-semibold text-blue-400">
+                  <Clock className="w-3.5 h-3.5" />
+                  <span>Estimated Refund Credit Turnaround Time (TAT)</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 text-[11px] text-slate-300 pt-0.5">
+                  <div>• <span className="font-semibold text-white">UPI / Wallets:</span> Instant to 24–48 hours</div>
+                  <div>• <span className="font-semibold text-white">Net Banking:</span> 2 to 4 business days</div>
+                  <div>• <span className="font-semibold text-white">Credit / Debit Cards:</span> 5 to 7 business days</div>
+                  <div>• <span className="font-semibold text-emerald-400">Gateway Processing:</span> Instant via Cashfree</div>
+                </div>
+                <p className="text-[10px] text-[var(--muted-foreground)] pt-0.5">
+                  Funds are credited back to the customer&apos;s original source payment method.
+                </p>
               </div>
 
               <div className="pt-2 flex justify-end gap-2">

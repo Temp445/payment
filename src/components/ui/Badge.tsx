@@ -29,7 +29,13 @@ export function Badge({ children, variant = "neutral", className }: BadgeProps) 
   );
 }
 
-export function StatusBadge({ status }: { status: string }) {
+export function StatusBadge({
+  status,
+  children,
+}: {
+  status: string;
+  children?: React.ReactNode;
+}) {
   const map: Record<string, "success" | "warning" | "danger" | "info" | "neutral"> = {
     PAID: "success",
     SUCCESS: "success",
@@ -38,6 +44,7 @@ export function StatusBadge({ status }: { status: string }) {
     CREATED: "neutral",
     PENDING: "warning",
     PROCESSING: "warning",
+    REFUND_PENDING: "warning",
     FAILED: "danger",
     USER_DROPPED: "warning",
     CANCELLED: "danger",
@@ -46,6 +53,5 @@ export function StatusBadge({ status }: { status: string }) {
     REFUNDED: "info",
   };
 
-  return <Badge variant={map[status] || "neutral"}>{status}</Badge>;
+  return <Badge variant={map[status] || "neutral"}>{children || status}</Badge>;
 }
-

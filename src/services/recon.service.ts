@@ -37,22 +37,42 @@ export class ReconciliationService {
   /**
    * Automatically fetch and sync settlements from Cashfree API
    */
-  static async syncSettlementsFromCashfree() {
+  static async syncSettlementsFromCashfree(options?: {
+    startDate?: Date;
+    endDate?: Date;
+  }) {
     try {
-      const data = await CashfreeAdapter.fetchSettlements(30);
-      const settlementsList = Array.isArray(data) ? data : data?.data || [];
+      const data = await CashfreeAdapter.fetchSettlements(30, options);
+      const settlementsList = Array.isArray(data)
+        ? data
+        : Array.isArray(data?.data)
+        ? data.data
+        : [];
 
       let syncedCount = 0;
       for (const item of settlementsList) {
-        if (!item.cf_settlement_id) continue;
+        const cfSettlementId = item.cf_settlement_id || item.settlement_id || item.event_id;
+        if (!cfSettlementId) continue;
+
+        const settlementAmount = Number(
+          item.settlement_amount ??
+          item.event_settlement_amount ??
+          item.amount ??
+          0
+        );
+
+        const utrNumber = item.settlement_utr || item.utr || item.payment_utr || undefined;
+        const status = item.status || item.event_status || "SETTLED";
+        const rawDate = item.settlement_date || item.event_time || item.created_at;
+        const settlementDate = rawDate ? new Date(rawDate) : new Date();
 
         await this.recordSettlement({
-          cfSettlementId: String(item.cf_settlement_id),
-          settlementAmount: Number(item.settlement_amount || item.amount || 0),
-          settlementCurrency: item.currency || "INR",
-          utrNumber: item.utr,
-          settlementDate: item.settlement_date ? new Date(item.settlement_date) : new Date(),
-          status: item.status || "SETTLED",
+          cfSettlementId: String(cfSettlementId),
+          settlementAmount,
+          settlementCurrency: item.currency || item.event_currency || "INR",
+          utrNumber,
+          settlementDate,
+          status,
           rawPayload: item,
         });
         syncedCount++;

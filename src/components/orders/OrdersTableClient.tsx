@@ -1,9 +1,16 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { StatusBadge } from "@/components/ui/Badge";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import {
+  formatCurrency,
+  formatDate,
+  getOrderDisplayStatus,
+  getOrderEnvironment,
+} from "@/lib/utils";
 import { OrderDetailDrawer } from "@/components/orders/OrderDetailDrawer";
+import { OrderRefundModal } from "@/components/orders/OrderRefundModal";
 import {
   Eye,
   Search,
@@ -14,6 +21,8 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
+  RotateCcw,
+  Shield,
 } from "lucide-react";
 
 interface OrdersTableClientProps {
@@ -21,10 +30,13 @@ interface OrdersTableClientProps {
 }
 
 export function OrdersTableClient({ initialOrders }: OrdersTableClientProps) {
-  const [orders] = useState<any[]>(initialOrders);
+  const router = useRouter();
+  const [orders, setOrders] = useState<any[]>(initialOrders);
   const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
+  const [refundingOrder, setRefundingOrder] = useState<any | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
+  const [envFilter, setEnvFilter] = useState("ALL");
   const [datePreset, setDatePreset] = useState("ALL");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -43,8 +55,17 @@ export function OrdersTableClient({ initialOrders }: OrdersTableClientProps) {
         (o.customerName && o.customerName.toLowerCase().includes(term)) ||
         (o.application?.appCode && o.application.appCode.toLowerCase().includes(term));
 
+      const displayStatus = getOrderDisplayStatus(o);
       const matchesStatus =
-        statusFilter === "ALL" || o.orderStatus === statusFilter;
+        statusFilter === "ALL" ||
+        o.orderStatus === statusFilter ||
+        displayStatus.status === statusFilter;
+
+      const env = getOrderEnvironment(o);
+      const matchesEnv =
+        envFilter === "ALL" ||
+        (envFilter === "PRODUCTION" && env === "production") ||
+        (envFilter === "SANDBOX" && env === "sandbox");
 
       // Date filtering
       let matchesDate = true;
@@ -81,7 +102,7 @@ export function OrdersTableClient({ initialOrders }: OrdersTableClientProps) {
         }
       }
 
-      return matchesSearch && matchesStatus && matchesDate;
+      return matchesSearch && matchesStatus && matchesEnv && matchesDate;
     });
   }, [orders, searchTerm, statusFilter, datePreset, startDate, endDate]);
 
@@ -118,15 +139,52 @@ export function OrdersTableClient({ initialOrders }: OrdersTableClientProps) {
   const handleResetFilters = () => {
     setSearchTerm("");
     setStatusFilter("ALL");
+    setEnvFilter("ALL");
     setDatePreset("ALL");
     setStartDate("");
     setEndDate("");
     setCurrentPage(1);
   };
 
+  const handleRefundSuccess = (result: {
+    orderId: string;
+    refundId: string;
+    refundAmount: number;
+    orderStatus: string;
+    refundStatus: string;
+  }) => {
+    setOrders((prev) =>
+      prev.map((o) => {
+        if (o.id === result.orderId) {
+          const updated = {
+            ...o,
+            orderStatus: result.orderStatus,
+            refunds: [
+              ...(o.refunds || []),
+              {
+                id: result.refundId,
+                cfRefundId: result.refundId,
+                refundAmount: result.refundAmount,
+                refundStatus: result.refundStatus,
+                createdAt: new Date().toISOString(),
+              },
+            ],
+          };
+          if (selectedOrder?.id === o.id) {
+            setSelectedOrder(updated);
+          }
+          return updated;
+        }
+        return o;
+      })
+    );
+    router.refresh();
+  };
+
   const hasActiveFilters =
     searchTerm ||
     statusFilter !== "ALL" ||
+    envFilter !== "ALL" ||
     datePreset !== "ALL" ||
     startDate ||
     endDate;
@@ -230,9 +288,28 @@ export function OrdersTableClient({ initialOrders }: OrdersTableClientProps) {
               <option value="PAID">PAID</option>
               <option value="ACTIVE">ACTIVE</option>
               <option value="CREATED">CREATED</option>
-              <option value="FAILED">FAILED</option>
-              <option value="PARTIALLY_REFUNDED">PARTIALLY_REFUNDED</option>
+              <option value="REFUND_PENDING">REFUND PENDING</option>
               <option value="REFUNDED">REFUNDED</option>
+              <option value="PARTIALLY_REFUNDED">PARTIALLY_REFUNDED</option>
+              <option value="FAILED">FAILED</option>
+            </select>
+          </div>
+
+          {/* Environment Filter */}
+          <div className="flex items-center gap-1.5">
+            <Shield className="w-4 h-4 text-[var(--muted-foreground)]" />
+            <select
+              value={envFilter}
+              onChange={(e) => {
+                setEnvFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+              aria-label="Filter by environment"
+              className="px-3 py-2 rounded-lg bg-[var(--card)] border border-[var(--border)] text-xs text-[var(--foreground)] focus:outline-none focus:border-blue-500"
+            >
+              <option value="ALL">All Environments</option>
+              <option value="PRODUCTION">Live Production</option>
+              <option value="SANDBOX">Sandbox / Test</option>
             </select>
           </div>
 
@@ -261,6 +338,7 @@ export function OrdersTableClient({ initialOrders }: OrdersTableClientProps) {
                 <th className="pb-3 font-semibold">App Code</th>
                 <th className="pb-3 font-semibold">Customer</th>
                 <th className="pb-3 font-semibold">Amount</th>
+                <th className="pb-3 font-semibold">Env</th>
                 <th className="pb-3 font-semibold">Status</th>
                 <th className="pb-3 font-semibold">Created At</th>
                 <th className="pb-3 font-semibold text-right">Action</th>
@@ -269,7 +347,7 @@ export function OrdersTableClient({ initialOrders }: OrdersTableClientProps) {
             <tbody className="divide-y divide-[var(--border)]">
               {paginatedOrders.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-8 text-center text-[var(--muted-foreground)]">
+                  <td colSpan={9} className="py-8 text-center text-[var(--muted-foreground)]">
                     No matching orders found.
                   </td>
                 </tr>
@@ -303,23 +381,66 @@ export function OrdersTableClient({ initialOrders }: OrdersTableClientProps) {
                       {formatCurrency(order.orderAmount)}
                     </td>
                     <td className="py-3">
-                      <StatusBadge status={order.orderStatus} />
+                      {getOrderEnvironment(order) === "production" ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                          LIVE
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+                          SANDBOX
+                        </span>
+                      )}
                     </td>
-                    <td className="py-3 text-[var(--muted-foreground)]">
-                      {formatDate(order.createdAt)}
-                    </td>
-                    <td className="py-3 text-right">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedOrder(order);
-                        }}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 text-xs font-medium"
-                      >
-                        <Eye className="w-3.5 h-3.5" />
-                        Details
-                      </button>
-                    </td>
+                    {(() => {
+                      const display = getOrderDisplayStatus(order);
+                      const canRefund =
+                        (order.orderStatus === "PAID" ||
+                          order.orderStatus === "PARTIALLY_REFUNDED") &&
+                        !display.isPendingRefund &&
+                        !display.isFullyRefunded;
+
+                      return (
+                        <>
+                          <td className="py-3">
+                            <StatusBadge status={display.badgeStatus}>
+                              {display.label}
+                            </StatusBadge>
+                          </td>
+                          <td className="py-3 text-[var(--muted-foreground)]">
+                            {formatDate(order.createdAt)}
+                          </td>
+                          <td className="py-3 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              {canRefund && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setRefundingOrder(order);
+                                  }}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 border border-rose-500/20 text-xs font-medium transition cursor-pointer"
+                                  title="Refund Order"
+                                >
+                                  <RotateCcw className="w-3 h-3" />
+                                  <span>Refund</span>
+                                </button>
+                              )}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedOrder(order);
+                                }}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 text-xs font-medium transition cursor-pointer"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                                <span>Details</span>
+                              </button>
+                            </div>
+                          </td>
+                        </>
+                      );
+                    })()}
                   </tr>
                 ))
               )}
@@ -423,6 +544,15 @@ export function OrdersTableClient({ initialOrders }: OrdersTableClientProps) {
       <OrderDetailDrawer
         order={selectedOrder}
         onClose={() => setSelectedOrder(null)}
+        onRefund={(order) => setRefundingOrder(order)}
+      />
+
+      {/* Gateway Refund Initiation Modal */}
+      <OrderRefundModal
+        order={refundingOrder}
+        isOpen={!!refundingOrder}
+        onClose={() => setRefundingOrder(null)}
+        onSuccess={handleRefundSuccess}
       />
     </div>
   );

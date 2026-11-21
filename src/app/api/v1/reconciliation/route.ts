@@ -27,7 +27,13 @@ export async function POST(req: NextRequest) {
 
     // Check if triggering automated sync from Cashfree API
     if (body.action === "sync") {
-      const result = await ReconciliationService.syncSettlementsFromCashfree();
+      const options = body.options
+        ? {
+            startDate: body.options.startDate ? new Date(body.options.startDate) : undefined,
+            endDate: body.options.endDate ? new Date(body.options.endDate) : undefined,
+          }
+        : undefined;
+      const result = await ReconciliationService.syncSettlementsFromCashfree(options);
       return NextResponse.json(result, { status: 200 });
     }
 
