@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { StatusBadge } from "@/components/ui/Badge";
 import {
@@ -23,6 +23,7 @@ import {
   ChevronsRight,
   RotateCcw,
   Shield,
+  RefreshCw,
 } from "lucide-react";
 
 interface OrdersTableClientProps {
@@ -42,6 +43,17 @@ export function OrdersTableClient({ initialOrders }: OrdersTableClientProps) {
   const [endDate, setEndDate] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  useEffect(() => {
+    setOrders(initialOrders);
+  }, [initialOrders]);
+
+  const handleRefresh = () => {
+    setIsRefreshing(true);
+    router.refresh();
+    setTimeout(() => setIsRefreshing(false), 800);
+  };
 
   // Filter orders
   const filteredOrders = useMemo(() => {
@@ -328,6 +340,17 @@ export function OrdersTableClient({ initialOrders }: OrdersTableClientProps) {
               Reset
             </button>
           )}
+
+          {/* Refresh Button */}
+          <button
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            className="p-2 rounded-lg border border-[var(--border)] text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-slate-800 transition flex items-center gap-1.5 shrink-0"
+            title="Refresh orders ledger"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin text-blue-400" : ""}`} />
+            <span className="hidden sm:inline font-medium">Refresh</span>
+          </button>
         </div>
       </div>
 

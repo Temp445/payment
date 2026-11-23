@@ -19,7 +19,7 @@ export function ThemeToggle({
       type="button"
       aria-label="Toggle visual theme"
       title={theme === "dark" ? "Switch to White Theme" : "Switch to Dark Theme"}
-      className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border transition cursor-pointer text-xs font-semibold select-none ${
+      className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl  transition cursor-pointer text-xs font-semibold select-none ${
         theme === "dark"
           ? "bg-slate-800/80 hover:bg-slate-700/80 text-amber-300 border-slate-700 hover:border-slate-600 shadow-sm"
           : "bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-300 hover:border-slate-400 shadow-sm"

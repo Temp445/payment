@@ -1,8 +1,8 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Layers, Filter, ShieldCheck, Lock } from "lucide-react";
+import { Layers, Filter, ShieldCheck, Lock, RefreshCw } from "lucide-react";
 
 interface AppFilterBarProps {
   applications: { id: string; appCode: string; appName: string }[];
@@ -18,6 +18,7 @@ export function AppFilterBar({
   isRestricted = false,
 }: AppFilterBarProps) {
   const router = useRouter();
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   function handleChange(e: React.ChangeEvent<HTMLSelectElement>) {
     const val = e.target.value;
@@ -26,6 +27,12 @@ export function AppFilterBar({
     } else {
       router.push(`/?app=${encodeURIComponent(val)}`);
     }
+  }
+
+  function handleRefresh() {
+    setIsRefreshing(true);
+    router.refresh();
+    setTimeout(() => setIsRefreshing(false), 800);
   }
 
   return (
@@ -54,7 +61,7 @@ export function AppFilterBar({
         </div>
       </div>
 
-      <div className="w-full sm:w-auto shrink-0">
+      <div className="w-full sm:w-auto shrink-0 flex items-center gap-2">
         <select
           value={selectedAppId || "ALL"}
           onChange={handleChange}
@@ -75,6 +82,16 @@ export function AppFilterBar({
             </option>
           )}
         </select>
+
+        <button
+          onClick={handleRefresh}
+          disabled={isRefreshing}
+          className="p-2 rounded-lg border border-[var(--border)] text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-slate-800 transition flex items-center gap-1.5 shrink-0"
+          title="Refresh dashboard metrics"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin text-blue-400" : ""}`} />
+          <span className="hidden sm:inline font-medium">Refresh</span>
+        </button>
       </div>
     </div>
   );

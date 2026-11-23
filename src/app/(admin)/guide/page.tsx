@@ -120,12 +120,18 @@ VITE_PAYMENT_HUB_URL="${apiUrl}"
 VITE_PAYMENT_HUB_CLIENT_ID="<YOUR_PUBLIC_CLIENT_ID>"
 
 ### Step 3: Create Hook (src/hooks/usePaymentHub.ts)
-Create "src/hooks/usePaymentHub.ts" with dynamic mode detection, Cashfree dropin modal support, payment polling, and error handling. (Reference complete code at: ${guideUrl}#react-vite)
+Create "src/hooks/usePaymentHub.ts" with dynamic mode detection, Cashfree dropin modal support, payment polling, and error handling.
+IMPORTANT RULE: Trigger order creation ONLY when the user clicks the payment button in pay(). Do NOT eagerly create orders on page load/mount or card hover to prevent creating abandoned/ghost orders.
+(Reference complete code at: ${guideUrl}#react-vite)
 
 ### Step 4: Add <CheckoutButton />
-Create "src/components/CheckoutButton.tsx" to trigger payments effortlessly without backend servers. (Reference complete code at: ${guideUrl}#react-vite)
+Create "src/components/CheckoutButton.tsx" to trigger payments when clicked. (Reference complete code at: ${guideUrl}#react-vite)
 
-### Step 5: Verify Whitelisting
+### Step 5: Webhook Receiver / Backend Activation
+If using Supabase Edge Functions or a backend server, deploy a webhook receiver at /functions/v1/payment-hub-webhook to verify signatures with PAYMENT_HUB_WEBHOOK_SECRET and activate user subscriptions in the database.
+Configure this Webhook Destination URL in Payment Hub (/apps) for guaranteed background delivery.
+
+### Step 6: Verify Whitelisting
 Ensure your client frontend domain (e.g. http://localhost:5173 or your production domain) is whitelisted in Cashfree Merchant Dashboard under Developers > Whitelisting.`;
 }
 
@@ -134,7 +140,7 @@ function getNextJsAiPrompt(hubOrigin: string) {
   const guideUrl = `${cleanOrigin}/guide`;
   const apiUrl = `${cleanOrigin}/api/v1`;
 
-  return `You are an expert Next.js developer. Integrate Central Payment Hub checkout into this Next.js application by following these instructions step-by-step:
+  return `You are an expert Next.js developer. Integrate Central Payment Hub checkout and automated subscription licensing into this Next.js application by following these instructions step-by-step:
 
 ### Official Guide & Reference Documentation
 • Integration Guide URL: ${guideUrl}
@@ -147,17 +153,31 @@ npm install @cashfreepayments/cashfree-js
 ### Step 2: Configure Environment Variables (.env.local)
 NEXT_PUBLIC_PAYMENT_HUB_URL="${apiUrl}"
 NEXT_PUBLIC_PAYMENT_HUB_CLIENT_ID="<YOUR_PUBLIC_CLIENT_ID>"
+PAYMENT_HUB_WEBHOOK_SECRET="<YOUR_WEBHOOK_SECRET>" # Found in Payment Hub /apps
 
 ### Step 3: Create Hook (hooks/usePaymentHub.ts)
 "use client";
 import { useState } from "react";
 import { load } from "@cashfreepayments/cashfree-js";
-// Handles payment initiation, dynamic mode detection, Cashfree drop-in popup, auto-prewarm, and status polling. Reference full architecture at: ${guideUrl}#nextjs-app-router
+
+// IMPORTANT RULE: Trigger order creation ONLY on user click in pay(). Do NOT auto-create orders on page load/mount to prevent ghost orders.
+// Handles payment initiation, dynamic mode detection, Cashfree drop-in popup, and real-time status polling. Reference full architecture at: ${guideUrl}#nextjs-app-router
 
 ### Step 4: Add Checkout Action / Button
-Create a client component calling usePaymentHub() to initiate session and trigger Cashfree drop-in modal.
+Create a client component calling usePaymentHub().pay({ amount, customerPhone, ... }) only when the user deliberately clicks the button.
 
-### Step 5: Verify Whitelisting
+### Step 5: Create Webhook Receiver (app/api/webhooks/payment-hub/route.ts)
+Create a Next.js App Router route "app/api/webhooks/payment-hub/route.ts" to receive signed POST events from Central Payment Hub Outbox Queue:
+• Verify HMAC-SHA256 signature from "x-hub-signature" header using PAYMENT_HUB_WEBHOOK_SECRET.
+• Check idempotency (prevent duplicate order recording).
+• Insert payment record into database and activate subscription/plan for the organization.
+• Return HTTP 200 { received: true }.
+
+### Step 6: Configure Webhook Destination URL in Payment Hub
+In Central Payment Hub (/apps), edit this application and set:
+Webhook Destination URL: https://<your-domain>/api/webhooks/payment-hub
+
+### Step 7: Verify Whitelisting
 Ensure your frontend domain (e.g. http://localhost:3000 or production domain) is added to Cashfree Merchant Dashboard under Developers > Whitelisting.`;
 }
 

@@ -22,6 +22,8 @@ import {
   Upload,
   X,
   Image as ImageIcon,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 
 export default function ApplicationsPage() {
@@ -48,6 +50,8 @@ export default function ApplicationsPage() {
   const [editRegenerateWebhookSecret, setEditRegenerateWebhookSecret] = useState(false);
   const [editSubmitting, setEditSubmitting] = useState(false);
   const [editCredentialsResult, setEditCredentialsResult] = useState<any | null>(null);
+  const [showSecretMap, setShowSecretMap] = useState<Record<string, boolean>>({});
+  const [showEditSecret, setShowEditSecret] = useState(false);
 
   // Delete Modal states
   const [deleteApp, setDeleteApp] = useState<any | null>(null);
@@ -137,6 +141,7 @@ export default function ApplicationsPage() {
     setEditRegenerateSecret(false);
     setEditRegenerateWebhookSecret(false);
     setEditCredentialsResult(null);
+    setShowEditSecret(false);
   }
 
   async function handleUpdateApp(e: React.FormEvent) {
@@ -164,7 +169,7 @@ export default function ApplicationsPage() {
 
       const data = await res.json();
       if (data.success) {
-        if (data.app.clientSecret) {
+        if (data.app.clientSecret || (data.app.webhookSecret && editRegenerateWebhookSecret)) {
           setEditCredentialsResult(data.app);
         } else {
           setEditApp(null);
@@ -369,6 +374,44 @@ export default function ApplicationsPage() {
                     {app.webhookUrl || "No webhook URL configured"}
                   </p>
                 </div>
+
+                {app.webhookSecret && (
+                  <div>
+                    <span className="text-[var(--muted-foreground)] block">Webhook Secret:</span>
+                    <div className="flex items-center justify-between font-mono p-1.5 rounded bg-[var(--background)] border border-[var(--border)] mt-0.5">
+                      <span className="truncate pr-2 text-slate-300">
+                        {showSecretMap[app.id] ? app.webhookSecret : "••••••••••••••••••••••••••••••••"}
+                      </span>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setShowSecretMap((prev) => ({
+                              ...prev,
+                              [app.id]: !prev[app.id],
+                            }))
+                          }
+                          className="p-1 text-[var(--muted-foreground)] hover:text-white"
+                          title={showSecretMap[app.id] ? "Hide secret" : "Show secret"}
+                        >
+                          {showSecretMap[app.id] ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => copyToClipboard(app.webhookSecret, app.id + "-whsec")}
+                          className="p-1 text-[var(--muted-foreground)] hover:text-white"
+                          title="Copy webhook secret"
+                        >
+                          {copiedKey === app.id + "-whsec" ? (
+                            <Check className="w-3.5 h-3.5 text-emerald-400" />
+                          ) : (
+                            <Copy className="w-3.5 h-3.5" />
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Footer with Counters and Quick Actions */}
@@ -545,20 +588,34 @@ export default function ApplicationsPage() {
             {editCredentialsResult ? (
               <div className="space-y-4">
                 <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs text-amber-300 space-y-1">
-                  <p className="font-bold">⚠️ New Secret Generated!</p>
-                  <p>Save this Client Secret now. Any backend services using the old secret must be updated.</p>
+                  <p className="font-bold">⚠️ New Credentials Generated!</p>
+                  <p>Save these credentials now. Any client or backend services using old keys must be updated.</p>
                 </div>
 
                 <div className="space-y-2 text-xs">
-                  <div>
-                    <span className="text-[var(--muted-foreground)]">New Client Secret:</span>
-                    <div className="flex items-center justify-between font-mono p-2 rounded bg-[var(--background)] border border-[var(--border)] mt-1 text-amber-300 font-bold">
-                      <span className="truncate pr-2">{editCredentialsResult.clientSecret}</span>
-                      <button onClick={() => copyToClipboard(editCredentialsResult.clientSecret, "edit-sec")}>
-                        {copiedKey === "edit-sec" ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-                      </button>
+                  {editCredentialsResult.clientSecret && (
+                    <div>
+                      <span className="text-[var(--muted-foreground)]">New Client Secret:</span>
+                      <div className="flex items-center justify-between font-mono p-2 rounded bg-[var(--background)] border border-[var(--border)] mt-1 text-amber-300 font-bold">
+                        <span className="truncate pr-2">{editCredentialsResult.clientSecret}</span>
+                        <button onClick={() => copyToClipboard(editCredentialsResult.clientSecret, "edit-sec")}>
+                          {copiedKey === "edit-sec" ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                        </button>
+                      </div>
                     </div>
-                  </div>
+                  )}
+
+                  {editCredentialsResult.webhookSecret && editRegenerateWebhookSecret && (
+                    <div>
+                      <span className="text-[var(--muted-foreground)]">New Webhook Secret:</span>
+                      <div className="flex items-center justify-between font-mono p-2 rounded bg-[var(--background)] border border-[var(--border)] mt-1 text-cyan-300 font-bold">
+                        <span className="truncate pr-2">{editCredentialsResult.webhookSecret}</span>
+                        <button onClick={() => copyToClipboard(editCredentialsResult.webhookSecret, "edit-whsec-new")}>
+                          {copiedKey === "edit-whsec-new" ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <button
@@ -613,6 +670,45 @@ export default function ApplicationsPage() {
                     Payment Hub will dispatch signed HMAC-SHA256 events to this address when orders are paid.
                   </p>
                 </div>
+
+                {/* Webhook Secret in Edit Modal */}
+                {editApp.webhookSecret && (
+                  <div>
+                    <span className="block text-[var(--muted-foreground)] mb-1 font-medium">
+                      Webhook Secret (HMAC-SHA256 Signature Key)
+                    </span>
+                    <div className="flex items-center justify-between font-mono p-2 rounded-lg bg-[var(--background)] border border-[var(--border)] text-xs text-slate-200">
+                      <span className="truncate pr-2 font-mono">
+                        {showEditSecret ? editApp.webhookSecret : "••••••••••••••••••••••••••••••••"}
+                      </span>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => setShowEditSecret(!showEditSecret)}
+                          className="p-1 text-[var(--muted-foreground)] hover:text-white"
+                          title={showEditSecret ? "Hide secret" : "Show secret"}
+                        >
+                          {showEditSecret ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => copyToClipboard(editApp.webhookSecret, "edit-whsec")}
+                          className="p-1 text-[var(--muted-foreground)] hover:text-white"
+                          title="Copy webhook secret"
+                        >
+                          {copiedKey === "edit-whsec" ? (
+                            <Check className="w-3.5 h-3.5 text-emerald-400" />
+                          ) : (
+                            <Copy className="w-3.5 h-3.5" />
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-[var(--muted-foreground)] mt-1">
+                      Save this in your client application's <code className="text-cyan-400">PAYMENT_HUB_WEBHOOK_SECRET</code> environment variable.
+                    </p>
+                  </div>
+                )}
 
                 {/* Checkout Branding */}
                 <div className="space-y-3 p-3 rounded-lg border border-[var(--border)]">

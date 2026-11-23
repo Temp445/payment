@@ -154,7 +154,7 @@ export function Sidebar() {
           <span className="font-semibold px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400">{userRole}</span>
         </div>
         <p className="text-[10px] text-[var(--muted-foreground)] mt-1.5 opacity-70">
-          Payment Hub Multi-Tenant v1.0.0
+          Payment Hub v1.0.0
         </p>
       </div>
     </>

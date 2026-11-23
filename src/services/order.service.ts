@@ -4,6 +4,7 @@ import { AuthenticatedApp } from "@/lib/auth";
 import { logger } from "@/lib/logger";
 import { getCachedCashfreeConfig, ensureHubConfigLoaded } from "@/lib/config";
 import { SubscriptionService } from "./subscription.service";
+import { OutboxWorker } from "@/lib/outboxWorker";
 
 export interface CreateOrderInput {
   order_id: string;
@@ -388,6 +389,43 @@ export class OrderService {
                 logger.info(`Subscription auto-activated for organization ${metadata.organization_id}`);
               } catch (subErr: any) {
                 logger.warn(`Subscription activation skipped or table pending: ${subErr.message}`);
+              }
+            }
+
+            // Outbox Dispatch: Enqueue webhook notification to client app if configured
+            if (app.webhookUrl) {
+              try {
+                const existingOutbox = await prisma.webhookOutboxQueue.findFirst({
+                  where: { orderId: order.id, eventType: "PAYMENT.SUCCESS" },
+                });
+                if (!existingOutbox) {
+                  await prisma.webhookOutboxQueue.create({
+                    data: {
+                      applicationId: order.applicationId,
+                      orderId: order.id,
+                      eventType: "PAYMENT.SUCCESS",
+                      payload: {
+                        event_type: "PAYMENT.SUCCESS",
+                        app_code: app.appCode,
+                        order_id: order.appOrderId,
+                        cf_order_id: order.cfOrderId,
+                        amount: paymentAmount,
+                        currency: "INR",
+                        payment_id: String(successPayment.cf_payment_id),
+                        payment_status: "SUCCESS",
+                        payment_method: successPayment.payment_group || null,
+                        timestamp: new Date().toISOString(),
+                        metadata: metadata,
+                      },
+                      status: "PENDING",
+                    },
+                  });
+                  OutboxWorker.processBatch(5).catch((err) =>
+                    logger.error("Background outbox dispatch error from poll verification", err)
+                  );
+                }
+              } catch (outboxErr: any) {
+                logger.warn(`Outbox queue enqueue failed in getOrderStatus: ${outboxErr.message}`);
               }
             }
 
