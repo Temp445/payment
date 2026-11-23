@@ -501,14 +501,14 @@ export default function ApplicationsPage() {
               <form onSubmit={handleCreateApp} className="space-y-4 text-xs">
                 <div>
                   <label className="block text-[var(--muted-foreground)] mb-1">
-                    App Code (e.g. APP001, WEBSITE_02, ANDROID_APP)
+                    App Code (e.g. ACE_CRM,WEBSITE_02, ANDROID_APP)
                   </label>
                   <input
                     type="text"
                     required
                     value={appCode}
                     onChange={(e) => setAppCode(e.target.value.toUpperCase())}
-                    placeholder="APP001"
+                    placeholder="ACE_PAYROLL"
                     className="w-full px-3 py-2 rounded-lg bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)] font-mono focus:outline-none focus:border-blue-500"
                   />
                 </div>

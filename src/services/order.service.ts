@@ -336,10 +336,12 @@ export class OrderService {
           );
 
           if (successPayment) {
-            await prisma.order.update({
-              where: { id: order.id },
+            // Atomic state transition guard: Prevents concurrent polling requests from duplicating subscriptions or outbox entries
+            const transitionResult = await prisma.order.updateMany({
+              where: { id: order.id, orderStatus: "ACTIVE" },
               data: { orderStatus: "PAID" },
             });
+            const isFirstToTransition = transitionResult.count > 0;
 
             const paymentAmount = successPayment.payment_amount ?? Number(order.orderAmount);
             const method = successPayment.payment_group || "OTHER";
@@ -365,67 +367,70 @@ export class OrderService {
 
             order.orderStatus = "PAID";
 
-            // Centralized Subscription Engine: Auto-activate subscription if order has metadata
-            const metadata: any = order.metadata || {};
-            if (metadata?.organization_id && metadata?.product_id && metadata?.offer_id) {
-              try {
-                await SubscriptionService.recordSubscriptionTransaction({
-                  gatewayPaymentId: String(successPayment.cf_payment_id),
-                  gatewayOrderId: order.appOrderId,
-                  gatewaySignature: "HUB_POLL_VERIFIED",
-                  gatewayName: "CASHFREE",
-                  amount: paymentAmount,
-                  currency: "INR",
-                  status: "PAID",
-                  receiptNumber: metadata.receipt_number || `REC_${order.appOrderId}`,
-                  productId: metadata.product_id,
-                  offerId: metadata.offer_id,
-                  offerPeriod: Number(metadata.offer_period || 1),
-                  offerPeriodType: metadata.offer_period_type || "month",
-                  organizationId: metadata.organization_id,
-                  userId: metadata.user_id || undefined,
-                  applicationId: order.applicationId,
-                });
-                logger.info(`Subscription auto-activated for organization ${metadata.organization_id}`);
-              } catch (subErr: any) {
-                logger.warn(`Subscription activation skipped or table pending: ${subErr.message}`);
-              }
-            }
-
-            // Outbox Dispatch: Enqueue webhook notification to client app if configured
-            if (app.webhookUrl) {
-              try {
-                const existingOutbox = await prisma.webhookOutboxQueue.findFirst({
-                  where: { orderId: order.id, eventType: "PAYMENT.SUCCESS" },
-                });
-                if (!existingOutbox) {
-                  await prisma.webhookOutboxQueue.create({
-                    data: {
-                      applicationId: order.applicationId,
-                      orderId: order.id,
-                      eventType: "PAYMENT.SUCCESS",
-                      payload: {
-                        event_type: "PAYMENT.SUCCESS",
-                        app_code: app.appCode,
-                        order_id: order.appOrderId,
-                        cf_order_id: order.cfOrderId,
-                        amount: paymentAmount,
-                        currency: "INR",
-                        payment_id: String(successPayment.cf_payment_id),
-                        payment_status: "SUCCESS",
-                        payment_method: successPayment.payment_group || null,
-                        timestamp: new Date().toISOString(),
-                        metadata: metadata,
-                      },
-                      status: "PENDING",
-                    },
+            // Only the single request that transitioned the status executes side-effects (Subscription & Outbox)
+            if (isFirstToTransition) {
+              // Centralized Subscription Engine: Auto-activate subscription if order has metadata
+              const metadata: any = order.metadata || {};
+              if (metadata?.organization_id && metadata?.product_id && metadata?.offer_id) {
+                try {
+                  await SubscriptionService.recordSubscriptionTransaction({
+                    gatewayPaymentId: String(successPayment.cf_payment_id),
+                    gatewayOrderId: order.appOrderId,
+                    gatewaySignature: "HUB_POLL_VERIFIED",
+                    gatewayName: "CASHFREE",
+                    amount: paymentAmount,
+                    currency: "INR",
+                    status: "PAID",
+                    receiptNumber: metadata.receipt_number || `REC_${order.appOrderId}`,
+                    productId: metadata.product_id,
+                    offerId: metadata.offer_id,
+                    offerPeriod: Number(metadata.offer_period || 1),
+                    offerPeriodType: metadata.offer_period_type || "month",
+                    organizationId: metadata.organization_id,
+                    userId: metadata.user_id || undefined,
+                    applicationId: order.applicationId,
                   });
-                  OutboxWorker.processBatch(5).catch((err) =>
-                    logger.error("Background outbox dispatch error from poll verification", err)
-                  );
+                  logger.info(`Subscription auto-activated for organization ${metadata.organization_id}`);
+                } catch (subErr: any) {
+                  logger.warn(`Subscription activation skipped or table pending: ${subErr.message}`);
                 }
-              } catch (outboxErr: any) {
-                logger.warn(`Outbox queue enqueue failed in getOrderStatus: ${outboxErr.message}`);
+              }
+
+              // Outbox Dispatch: Enqueue webhook notification to client app if configured
+              if (app.webhookUrl) {
+                try {
+                  const existingOutbox = await prisma.webhookOutboxQueue.findFirst({
+                    where: { orderId: order.id, eventType: "PAYMENT.SUCCESS" },
+                  });
+                  if (!existingOutbox) {
+                    await prisma.webhookOutboxQueue.create({
+                      data: {
+                        applicationId: order.applicationId,
+                        orderId: order.id,
+                        eventType: "PAYMENT.SUCCESS",
+                        payload: {
+                          event_type: "PAYMENT.SUCCESS",
+                          app_code: app.appCode,
+                          order_id: order.appOrderId,
+                          cf_order_id: order.cfOrderId,
+                          amount: paymentAmount,
+                          currency: "INR",
+                          payment_id: String(successPayment.cf_payment_id),
+                          payment_status: "SUCCESS",
+                          payment_method: successPayment.payment_group || null,
+                          timestamp: new Date().toISOString(),
+                          metadata: metadata,
+                        },
+                        status: "PENDING",
+                      },
+                    });
+                    OutboxWorker.processBatch(5).catch((err) =>
+                      logger.error("Background outbox dispatch error from poll verification", err)
+                    );
+                  }
+                } catch (outboxErr: any) {
+                  logger.warn(`Outbox queue enqueue failed in getOrderStatus: ${outboxErr.message}`);
+                }
               }
             }
 
