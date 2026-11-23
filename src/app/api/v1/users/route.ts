@@ -320,11 +320,140 @@ export async function PATCH(req: NextRequest) {
       });
     }
 
+    // ACTION 7: PERMANENTLY DELETE USER
+    if (action === "DELETE") {
+      if (callerUser && callerUser.id === userId) {
+        return NextResponse.json(
+          { success: false, error: "You cannot delete your own admin account." },
+          { status: 400 }
+        );
+      }
+
+      // Verify target user exists
+      const targetUserResult = await prisma.$queryRawUnsafe<
+        Array<{ id: string; email: string | null; raw_app_meta_data: any; raw_user_meta_data: any }>
+      >(`
+        SELECT id, email, raw_app_meta_data, raw_user_meta_data 
+        FROM auth.users 
+        WHERE id = '${userId}'::uuid;
+      `);
+
+      if (!targetUserResult || targetUserResult.length === 0) {
+        return NextResponse.json({ success: false, error: "User not found." }, { status: 404 });
+      }
+
+      const target = targetUserResult[0];
+      const targetRole = (target.raw_app_meta_data?.role || target.raw_user_meta_data?.role || "EMPLOYEE").toUpperCase();
+
+      // Guard against deleting the last remaining admin
+      if (targetRole === "ADMIN") {
+        const adminCountResult = await prisma.$queryRawUnsafe<Array<{ count: bigint | number }>>(`
+          SELECT count(*) as count 
+          FROM auth.users 
+          WHERE (raw_app_meta_data->>'role' = 'ADMIN' OR raw_user_meta_data->>'role' = 'ADMIN');
+        `);
+        const adminCount = Number(adminCountResult[0]?.count || 0);
+        if (adminCount <= 1) {
+          return NextResponse.json(
+            { success: false, error: "Cannot delete the last remaining administrator account." },
+            { status: 400 }
+          );
+        }
+      }
+
+      // Permanently remove from auth.users (foreign key cascades remove identities/sessions)
+      await prisma.$executeRawUnsafe(`
+        DELETE FROM auth.users WHERE id = '${userId}'::uuid;
+      `);
+
+      return NextResponse.json({
+        success: true,
+        message: `User ${target.email || userId} has been permanently deleted.`,
+      });
+    }
+
     return NextResponse.json({ success: false, error: "Unknown action requested" }, { status: 400 });
   } catch (err: any) {
     console.error("Failed to update user:", err);
     return NextResponse.json(
       { success: false, error: err.message || "Failed to update user" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(req: NextRequest) {
+  try {
+    const { authorized, callerUser } = await verifyIsAdmin(req);
+    if (!authorized) {
+      return NextResponse.json(
+        { success: false, error: "Access denied. Administrator permissions required." },
+        { status: 403 }
+      );
+    }
+
+    let userId: string | null = null;
+    try {
+      const body = await req.json();
+      userId = body.userId;
+    } catch {
+      const url = new URL(req.url);
+      userId = url.searchParams.get("userId");
+    }
+
+    if (!userId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) {
+      return NextResponse.json({ success: false, error: "Invalid user ID provided." }, { status: 400 });
+    }
+
+    if (callerUser && callerUser.id === userId) {
+      return NextResponse.json(
+        { success: false, error: "You cannot delete your own admin account." },
+        { status: 400 }
+      );
+    }
+
+    const targetUserResult = await prisma.$queryRawUnsafe<
+      Array<{ id: string; email: string | null; raw_app_meta_data: any; raw_user_meta_data: any }>
+    >(`
+      SELECT id, email, raw_app_meta_data, raw_user_meta_data 
+      FROM auth.users 
+      WHERE id = '${userId}'::uuid;
+    `);
+
+    if (!targetUserResult || targetUserResult.length === 0) {
+      return NextResponse.json({ success: false, error: "User not found." }, { status: 404 });
+    }
+
+    const target = targetUserResult[0];
+    const targetRole = (target.raw_app_meta_data?.role || target.raw_user_meta_data?.role || "EMPLOYEE").toUpperCase();
+
+    if (targetRole === "ADMIN") {
+      const adminCountResult = await prisma.$queryRawUnsafe<Array<{ count: bigint | number }>>(`
+        SELECT count(*) as count 
+        FROM auth.users 
+        WHERE (raw_app_meta_data->>'role' = 'ADMIN' OR raw_user_meta_data->>'role' = 'ADMIN');
+      `);
+      const adminCount = Number(adminCountResult[0]?.count || 0);
+      if (adminCount <= 1) {
+        return NextResponse.json(
+          { success: false, error: "Cannot delete the last remaining administrator account." },
+          { status: 400 }
+        );
+      }
+    }
+
+    await prisma.$executeRawUnsafe(`
+      DELETE FROM auth.users WHERE id = '${userId}'::uuid;
+    `);
+
+    return NextResponse.json({
+      success: true,
+      message: `User ${target.email || userId} has been permanently deleted.`,
+    });
+  } catch (err: any) {
+    console.error("Failed to delete user:", err);
+    return NextResponse.json(
+      { success: false, error: err.message || "Failed to delete user" },
       { status: 500 }
     );
   }

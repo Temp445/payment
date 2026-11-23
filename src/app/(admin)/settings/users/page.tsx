@@ -30,6 +30,7 @@ import {
   Layers,
   CheckSquare,
   Square,
+  Trash2,
 } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
@@ -71,6 +72,10 @@ export default function UsersSettingsPage() {
   const [assignModalUser, setAssignModalUser] = useState<UserItem | null>(null);
   const [selectedAppIds, setSelectedAppIds] = useState<string[]>([]);
   const [savingApps, setSavingApps] = useState(false);
+
+  // Modal for permanently deleting a user
+  const [userToDelete, setUserToDelete] = useState<UserItem | null>(null);
+  const [deletingUser, setDeletingUser] = useState(false);
 
   useEffect(() => {
     const supabase = createClient();
@@ -306,6 +311,32 @@ export default function UsersSettingsPage() {
       setStatusMsg({ type: "error", text: err.message || "Error updating role" });
     } finally {
       setActionLoading(null);
+    }
+  }
+
+  // Permanently Delete User
+  async function handleDeleteUser() {
+    if (!userToDelete) return;
+    setDeletingUser(true);
+    setStatusMsg(null);
+    try {
+      const res = await fetch("/api/v1/users", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: userToDelete.id }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setStatusMsg({ type: "success", text: data.message });
+        setUserToDelete(null);
+        await fetchUsers();
+      } else {
+        setStatusMsg({ type: "error", text: data.error || "Failed to delete user" });
+      }
+    } catch (err: any) {
+      setStatusMsg({ type: "error", text: err.message || "Error deleting user" });
+    } finally {
+      setDeletingUser(false);
     }
   }
 
@@ -562,7 +593,7 @@ export default function UsersSettingsPage() {
                   <th className="py-3 px-4 font-semibold min-w-[170px]">App Access</th>
                   <th className="py-3 px-4 font-semibold min-w-[130px]">Registered</th>
                   <th className="py-3 px-4 font-semibold min-w-[140px]">Last Sign In</th>
-                  <th className="py-3 px-4 font-semibold text-right min-w-[320px] whitespace-nowrap">Actions</th>
+                  <th className="py-3 px-4 font-semibold text-right min-w-[360px] whitespace-nowrap">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--border)]">
@@ -763,22 +794,42 @@ export default function UsersSettingsPage() {
                                     </>
                                   )}
                                 </button>
+                                {!isSelf && (
+                                  <button
+                                    onClick={() => setUserToDelete(user)}
+                                    title="Permanently Delete User"
+                                    className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 border border-red-500/20 transition shrink-0"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
                               </>
                             ) : user.status === "REJECTED" ? (
-                              <button
-                                onClick={() => handleApprove(user.id, "EMPLOYEE")}
-                                disabled={actionLoading === `approve-${user.id}`}
-                                className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold text-[11px] transition shadow flex items-center gap-1 shrink-0"
-                              >
-                                {actionLoading === `approve-${user.id}` ? (
-                                  <RefreshCw className="w-3 h-3 animate-spin" />
-                                ) : (
-                                  <>
-                                    <Check className="w-3 h-3" />
-                                    <span>Re-evaluate & Approve</span>
-                                  </>
+                              <>
+                                <button
+                                  onClick={() => handleApprove(user.id, "EMPLOYEE")}
+                                  disabled={actionLoading === `approve-${user.id}`}
+                                  className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold text-[11px] transition shadow flex items-center gap-1 shrink-0"
+                                >
+                                  {actionLoading === `approve-${user.id}` ? (
+                                    <RefreshCw className="w-3 h-3 animate-spin" />
+                                  ) : (
+                                    <>
+                                      <Check className="w-3 h-3" />
+                                      <span>Re-evaluate & Approve</span>
+                                    </>
+                                  )}
+                                </button>
+                                {!isSelf && (
+                                  <button
+                                    onClick={() => setUserToDelete(user)}
+                                    title="Permanently Delete User"
+                                    className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 border border-red-500/20 transition shrink-0"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
                                 )}
-                              </button>
+                              </>
                             ) : (
                               <>
                                 {/* ASSIGN APPS QUICK BUTTON FOR EMPLOYEES */}
@@ -815,37 +866,48 @@ export default function UsersSettingsPage() {
 
                                 {/* ACTIVATE / DEACTIVATE BUTTON */}
                                 {!isSelf ? (
-                                  user.status === "ACTIVE" ? (
+                                  <>
+                                    {user.status === "ACTIVE" ? (
+                                      <button
+                                        onClick={() => handleSetStatus(user.id, "DEACTIVATED")}
+                                        disabled={actionLoading === `status-${user.id}`}
+                                        className="px-2.5 py-1 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 font-medium text-[11px] transition flex items-center gap-1 shrink-0"
+                                      >
+                                        {actionLoading === `status-${user.id}` ? (
+                                          <RefreshCw className="w-3 h-3 animate-spin" />
+                                        ) : (
+                                          <>
+                                            <UserX className="w-3 h-3" />
+                                            <span>Deactivate</span>
+                                          </>
+                                        )}
+                                      </button>
+                                    ) : (
+                                      <button
+                                        onClick={() => handleSetStatus(user.id, "ACTIVE")}
+                                        disabled={actionLoading === `status-${user.id}`}
+                                        className="px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 font-medium text-[11px] transition flex items-center gap-1 shrink-0"
+                                      >
+                                        {actionLoading === `status-${user.id}` ? (
+                                          <RefreshCw className="w-3 h-3 animate-spin" />
+                                        ) : (
+                                          <>
+                                            <UserCheck className="w-3 h-3" />
+                                            <span>Activate</span>
+                                          </>
+                                        )}
+                                      </button>
+                                    )}
+
+                                    {/* PERMANENT DELETE BUTTON */}
                                     <button
-                                      onClick={() => handleSetStatus(user.id, "DEACTIVATED")}
-                                      disabled={actionLoading === `status-${user.id}`}
-                                      className="px-2.5 py-1 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 font-medium text-[11px] transition flex items-center gap-1 shrink-0"
+                                      onClick={() => setUserToDelete(user)}
+                                      title="Permanently Delete User"
+                                      className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 border border-red-500/20 transition shrink-0"
                                     >
-                                      {actionLoading === `status-${user.id}` ? (
-                                        <RefreshCw className="w-3 h-3 animate-spin" />
-                                      ) : (
-                                        <>
-                                          <UserX className="w-3 h-3" />
-                                          <span>Deactivate</span>
-                                        </>
-                                      )}
+                                      <Trash2 className="w-3.5 h-3.5" />
                                     </button>
-                                  ) : (
-                                    <button
-                                      onClick={() => handleSetStatus(user.id, "ACTIVE")}
-                                      disabled={actionLoading === `status-${user.id}`}
-                                      className="px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 font-medium text-[11px] transition flex items-center gap-1 shrink-0"
-                                    >
-                                      {actionLoading === `status-${user.id}` ? (
-                                        <RefreshCw className="w-3 h-3 animate-spin" />
-                                      ) : (
-                                        <>
-                                          <UserCheck className="w-3 h-3" />
-                                          <span>Activate</span>
-                                        </>
-                                      )}
-                                    </button>
-                                  )
+                                  </>
                                 ) : (
                                   <span className="text-[11px] text-slate-500 italic pr-2">Your Account</span>
                                 )}
@@ -983,59 +1045,81 @@ export default function UsersSettingsPage() {
                     {/* Touch-Friendly Action Buttons */}
                     <div className="pt-2 border-t border-slate-800/60">
                       {user.status === "PENDING_APPROVAL" ? (
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        <div className="space-y-2">
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                            <button
+                              onClick={() => handleApprove(user.id, "EMPLOYEE")}
+                              disabled={actionLoading === `approve-${user.id}`}
+                              className="w-full py-2 px-3 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs transition shadow flex items-center justify-center gap-1.5"
+                            >
+                              {actionLoading === `approve-${user.id}` ? (
+                                <RefreshCw className="w-3 h-3 animate-spin" />
+                              ) : (
+                                <>
+                                  <Check className="w-3.5 h-3.5" />
+                                  <span>Approve (Employee)</span>
+                                </>
+                              )}
+                            </button>
+                            <button
+                              onClick={() => handleApprove(user.id, "ADMIN")}
+                              disabled={actionLoading === `approve-${user.id}`}
+                              className="w-full py-2 px-3 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-semibold text-xs transition shadow flex items-center justify-center gap-1.5"
+                            >
+                              <ShieldCheck className="w-3.5 h-3.5" />
+                              <span>Approve (Admin)</span>
+                            </button>
+                            <button
+                              onClick={() => handleReject(user.id)}
+                              disabled={actionLoading === `reject-${user.id}`}
+                              className="w-full py-2 px-3 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 font-semibold text-xs transition shadow flex items-center justify-center gap-1.5"
+                            >
+                              {actionLoading === `reject-${user.id}` ? (
+                                <RefreshCw className="w-3 h-3 animate-spin" />
+                              ) : (
+                                <>
+                                  <X className="w-3.5 h-3.5" />
+                                  <span>Reject Request</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+                          {!isSelf && (
+                            <button
+                              onClick={() => setUserToDelete(user)}
+                              className="w-full py-2 px-3 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 text-xs font-semibold transition flex items-center justify-center gap-1.5"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              <span>Permanently Delete User</span>
+                            </button>
+                          )}
+                        </div>
+                      ) : user.status === "REJECTED" ? (
+                        <div className="flex flex-col sm:flex-row items-center gap-2">
                           <button
                             onClick={() => handleApprove(user.id, "EMPLOYEE")}
                             disabled={actionLoading === `approve-${user.id}`}
-                            className="w-full py-2 px-3 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs transition shadow flex items-center justify-center gap-1.5"
+                            className="w-full sm:flex-1 py-2 px-3 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs transition shadow flex items-center justify-center gap-1.5"
                           >
                             {actionLoading === `approve-${user.id}` ? (
                               <RefreshCw className="w-3 h-3 animate-spin" />
                             ) : (
                               <>
                                 <Check className="w-3.5 h-3.5" />
-                                <span>Approve (Employee)</span>
+                                <span>Re-evaluate & Approve</span>
                               </>
                             )}
                           </button>
-                          <button
-                            onClick={() => handleApprove(user.id, "ADMIN")}
-                            disabled={actionLoading === `approve-${user.id}`}
-                            className="w-full py-2 px-3 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-semibold text-xs transition shadow flex items-center justify-center gap-1.5"
-                          >
-                            <ShieldCheck className="w-3.5 h-3.5" />
-                            <span>Approve (Admin)</span>
-                          </button>
-                          <button
-                            onClick={() => handleReject(user.id)}
-                            disabled={actionLoading === `reject-${user.id}`}
-                            className="w-full py-2 px-3 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 font-semibold text-xs transition shadow flex items-center justify-center gap-1.5"
-                          >
-                            {actionLoading === `reject-${user.id}` ? (
-                              <RefreshCw className="w-3 h-3 animate-spin" />
-                            ) : (
-                              <>
-                                <X className="w-3.5 h-3.5" />
-                                <span>Reject Request</span>
-                              </>
-                            )}
-                          </button>
-                        </div>
-                      ) : user.status === "REJECTED" ? (
-                        <button
-                          onClick={() => handleApprove(user.id, "EMPLOYEE")}
-                          disabled={actionLoading === `approve-${user.id}`}
-                          className="w-full py-2 px-3 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs transition shadow flex items-center justify-center gap-1.5"
-                        >
-                          {actionLoading === `approve-${user.id}` ? (
-                            <RefreshCw className="w-3 h-3 animate-spin" />
-                          ) : (
-                            <>
-                              <Check className="w-3.5 h-3.5" />
-                              <span>Re-evaluate & Approve</span>
-                            </>
+                          {!isSelf && (
+                            <button
+                              onClick={() => setUserToDelete(user)}
+                              className="w-full sm:w-auto py-2 px-3 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 text-xs font-semibold transition flex items-center justify-center gap-1.5"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              <span>Delete</span>
+                            </button>
                           )}
-                        </button>
+                        </div>
                       ) : (
                         <div className="flex flex-wrap items-center gap-2">
                           {user.role === "EMPLOYEE" && (
@@ -1067,37 +1151,49 @@ export default function UsersSettingsPage() {
                           )}
 
                           {!isSelf && (
-                            user.status === "ACTIVE" ? (
+                            <>
+                              {user.status === "ACTIVE" ? (
+                                <button
+                                  onClick={() => handleSetStatus(user.id, "DEACTIVATED")}
+                                  disabled={actionLoading === `status-${user.id}`}
+                                  className="flex-1 py-1.5 px-3 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 text-xs font-medium transition flex items-center justify-center gap-1"
+                                >
+                                  {actionLoading === `status-${user.id}` ? (
+                                    <RefreshCw className="w-3 h-3 animate-spin" />
+                                  ) : (
+                                    <>
+                                      <UserX className="w-3.5 h-3.5" />
+                                      <span>Deactivate</span>
+                                    </>
+                                  )}
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => handleSetStatus(user.id, "ACTIVE")}
+                                  disabled={actionLoading === `status-${user.id}`}
+                                  className="flex-1 py-1.5 px-3 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 text-xs font-medium transition flex items-center justify-center gap-1"
+                                >
+                                  {actionLoading === `status-${user.id}` ? (
+                                    <RefreshCw className="w-3 h-3 animate-spin" />
+                                  ) : (
+                                    <>
+                                      <UserCheck className="w-3.5 h-3.5" />
+                                      <span>Activate</span>
+                                    </>
+                                  )}
+                                </button>
+                              )}
+
+                              {/* PERMANENT DELETE BUTTON ON MOBILE */}
                               <button
-                                onClick={() => handleSetStatus(user.id, "DEACTIVATED")}
-                                disabled={actionLoading === `status-${user.id}`}
-                                className="flex-1 py-1.5 px-3 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 text-xs font-medium transition flex items-center justify-center gap-1"
+                                onClick={() => setUserToDelete(user)}
+                                className="py-1.5 px-3 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 text-xs font-medium transition flex items-center justify-center gap-1 shrink-0"
+                                title="Delete User"
                               >
-                                {actionLoading === `status-${user.id}` ? (
-                                  <RefreshCw className="w-3 h-3 animate-spin" />
-                                ) : (
-                                  <>
-                                    <UserX className="w-3.5 h-3.5" />
-                                    <span>Deactivate</span>
-                                  </>
-                                )}
+                                <Trash2 className="w-3.5 h-3.5" />
+                                <span>Delete</span>
                               </button>
-                            ) : (
-                              <button
-                                onClick={() => handleSetStatus(user.id, "ACTIVE")}
-                                disabled={actionLoading === `status-${user.id}`}
-                                className="flex-1 py-1.5 px-3 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 text-xs font-medium transition flex items-center justify-center gap-1"
-                              >
-                                {actionLoading === `status-${user.id}` ? (
-                                  <RefreshCw className="w-3 h-3 animate-spin" />
-                                ) : (
-                                  <>
-                                    <UserCheck className="w-3.5 h-3.5" />
-                                    <span>Activate</span>
-                                  </>
-                                )}
-                              </button>
-                            )
+                            </>
                           )}
                         </div>
                       )}
@@ -1317,6 +1413,88 @@ export default function UsersSettingsPage() {
                     <>
                       <Check className="w-3.5 h-3.5" />
                       <span>Save App Permissions</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Delete Confirmation Modal */}
+        {userToDelete && (
+          <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="w-full max-w-md bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-2xl p-5 sm:p-6 space-y-4 animate-in fade-in zoom-in-95 duration-150">
+              <div className="flex items-center justify-between pb-3 border-b border-[var(--border)]">
+                <div className="flex items-center gap-2.5 text-red-400">
+                  <div className="w-9 h-9 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center">
+                    <Trash2 className="w-5 h-5 text-red-400" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-sm text-[var(--foreground)]">Permanently Delete User</h3>
+                    <p className="text-[11px] text-[var(--muted-foreground)]">Irreversible action</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => !deletingUser && setUserToDelete(null)}
+                  disabled={deletingUser}
+                  className="p-1 rounded-lg text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-slate-800 transition"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                <p className="text-xs text-[var(--foreground)] leading-relaxed">
+                  Are you sure you want to permanently delete the account for:
+                </p>
+
+                <div className="p-3.5 rounded-xl bg-red-500/5 border border-red-500/20 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-xs text-[var(--foreground)]">
+                      {userToDelete.name || "No Display Name"}
+                    </span>
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-slate-800 text-slate-300">
+                      {userToDelete.role}
+                    </span>
+                  </div>
+                  <p className="text-xs font-mono text-red-400 truncate">{userToDelete.email}</p>
+                  <p className="text-[10px] text-[var(--muted-foreground)] font-mono truncate">ID: {userToDelete.id}</p>
+                </div>
+
+                <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-start gap-2.5">
+                  <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                  <p className="text-[11px] text-amber-300 leading-relaxed">
+                    This user will immediately lose all access, their auth credentials will be erased, and they will no longer be able to log in.
+                  </p>
+                </div>
+              </div>
+
+              <div className="pt-3 border-t border-[var(--border)] flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setUserToDelete(null)}
+                  disabled={deletingUser}
+                  className="w-full sm:w-auto px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-medium transition text-center"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDeleteUser}
+                  disabled={deletingUser}
+                  className="w-full sm:w-auto px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-semibold shadow-lg shadow-red-600/20 transition flex items-center justify-center gap-1.5 disabled:opacity-50"
+                >
+                  {deletingUser ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Deleting User...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Delete User Account</span>
                     </>
                   )}
                 </button>

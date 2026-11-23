@@ -261,7 +261,7 @@ export default function SignUpPage() {
               <div className="p-3 rounded-xl bg-blue-950/30 border border-blue-900/40 text-[11px] text-blue-300 flex items-start gap-2">
                 <ShieldAlert className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
                 <span>
-                  New accounts require administrator approval before access is granted. Self-registration with Admin privileges is restricted.
+                  New accounts require administrator approval before access is granted.
                 </span>
               </div>
             )}

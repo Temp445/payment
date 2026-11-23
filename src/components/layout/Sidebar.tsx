@@ -147,14 +147,23 @@ export function Sidebar() {
         })}
       </nav>
 
-     
+      {/* Footer Info */}
+      <div className="p-4 border-t border-[var(--border)] mt-auto shrink-0">
+        <div className="flex items-center justify-between text-[11px] text-[var(--muted-foreground)]">
+          <span>Portal Access:</span>
+          <span className="font-semibold px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400">{userRole}</span>
+        </div>
+        <p className="text-[10px] text-[var(--muted-foreground)] mt-1.5 opacity-70">
+          Payment Hub Multi-Tenant v1.0.0
+        </p>
+      </div>
     </>
   );
 
   return (
     <>
       {/* Desktop Persistent Sidebar */}
-      <aside className="hidden lg:flex flex-col w-64 border-r border-[var(--border)] bg-[var(--card)] shrink-0 min-h-screen">
+      <aside className="hidden lg:flex flex-col w-64 border-r border-[var(--border)] bg-[var(--card)] shrink-0 h-screen sticky top-0 z-30">
         {navContent}
       </aside>
 
