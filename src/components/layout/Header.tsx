@@ -6,11 +6,13 @@ import { Shield, LogOut, User, Menu, LogIn } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { useSidebar } from "./SidebarContext";
+import { ThemeToggle } from "@/components/theme/ThemeToggle";
 
 export function Header({ title }: { title: string }) {
   const router = useRouter();
   const { toggleSidebar } = useSidebar();
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [userName, setUserName] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<string>("EMPLOYEE");
 
   useEffect(() => {
@@ -18,7 +20,9 @@ export function Header({ title }: { title: string }) {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (user?.email) {
         setUserEmail(user.email);
-        const role = (user.app_metadata?.role || "EMPLOYEE").toUpperCase();
+        const userMeta = (user.user_metadata || {}) as Record<string, any>;
+        setUserName(userMeta.full_name || userMeta.name || null);
+        const role = (user.app_metadata?.role || userMeta.role || "EMPLOYEE").toUpperCase();
         setUserRole(role);
       }
     });
@@ -28,7 +32,9 @@ export function Header({ title }: { title: string }) {
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setUserEmail(session?.user?.email || null);
       if (session?.user) {
-        const role = (session.user.app_metadata?.role || "EMPLOYEE").toUpperCase();
+        const userMeta = (session.user.user_metadata || {}) as Record<string, any>;
+        setUserName(userMeta.full_name || userMeta.name || null);
+        const role = (session.user.app_metadata?.role || userMeta.role || "EMPLOYEE").toUpperCase();
         setUserRole(role);
       }
     });
@@ -63,33 +69,27 @@ export function Header({ title }: { title: string }) {
 
       <div className="flex items-center gap-2 sm:gap-4 shrink-0">
         {/* Environment Badge */}
-        <div className="inline-flex items-center gap-1.5 px-2 sm:px-2.5 py-1 rounded-full text-[11px] sm:text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+        {/* <div className="inline-flex items-center gap-1.5 px-2 sm:px-2.5 py-1 rounded-full text-[11px] sm:text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
           <span className="w-1.5 sm:w-2 h-1.5 sm:h-2 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
           <span className="hidden sm:inline">Cashfree Live / Sandbox</span>
           <span className="sm:hidden font-mono">Live</span>
-        </div>
+        </div> */}
 
-        {/* User Info & Sign Out */}
+        {/* Theme Changer */}
+        <ThemeToggle />
+
+        {/* User Info & Profile & Sign Out */}
         {userEmail ? (
           <div className="flex items-center gap-1.5 sm:gap-3 pl-2 sm:pl-3 border-l border-[var(--border)]">
-            {/* Mobile Role Badge */}
-            <span
-              className={`md:hidden px-1.5 py-0.5 rounded text-[9px] font-bold border ${
-                userRole === "ADMIN"
-                  ? "bg-amber-500/10 text-amber-400 border-amber-500/30"
-                  : "bg-blue-500/10 text-blue-400 border-blue-500/30"
-              }`}
+            {/* Mobile Profile Link */}
+            <Link
+              href="/profile"
+              title="My Profile"
+              className="md:hidden flex items-center gap-1.5 px-2 py-1 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800 transition"
             >
-              {userRole}
-            </span>
-
-            <div className="hidden md:flex items-center gap-1.5 text-xs text-[var(--muted-foreground)]">
-              <User className="w-3.5 h-3.5 text-blue-400 shrink-0" />
-              <span className="font-medium text-[var(--foreground)] max-w-[120px] lg:max-w-[160px] truncate" title={userEmail}>
-                {userEmail}
-              </span>
+              <User className="w-3.5 h-3.5 text-blue-400" />
               <span
-                className={`px-1.5 py-0.5 rounded text-[10px] font-bold border ${
+                className={`px-1.5 py-0.5 rounded text-[9px] font-bold border ${
                   userRole === "ADMIN"
                     ? "bg-amber-500/10 text-amber-400 border-amber-500/30"
                     : "bg-blue-500/10 text-blue-400 border-blue-500/30"
@@ -97,7 +97,31 @@ export function Header({ title }: { title: string }) {
               >
                 {userRole}
               </span>
-            </div>
+            </Link>
+
+            {/* Desktop Profile Link */}
+            <Link
+              href="/profile"
+              title="View and Edit Profile"
+              className="hidden md:flex items-center gap-2 px-2.5 py-1.5 rounded-xl hover:bg-slate-800/80 transition text-xs text-[var(--muted-foreground)] hover:text-white group border border-transparent hover:border-slate-800"
+            >
+              <div className="w-6 h-6 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 group-hover:bg-blue-600 group-hover:text-white transition">
+                <User className="w-3.5 h-3.5 shrink-0" />
+              </div>
+              <span className="font-semibold text-[var(--foreground)] max-w-[130px] lg:max-w-[170px] truncate" title={userName ? `${userName} (${userEmail})` : userEmail}>
+                {userName || userEmail}
+              </span>
+              {/* <span
+                className={`px-1.5 py-0.5 rounded text-[10px] font-bold border ${
+                  userRole === "ADMIN"
+                    ? "bg-amber-500/10 text-amber-400 border-amber-500/30"
+                    : "bg-blue-500/10 text-blue-400 border-blue-500/30"
+                }`}
+              >
+                {userRole}
+              </span> */}
+            </Link>
+
             <button
               onClick={handleSignOut}
               title="Sign Out"

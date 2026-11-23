@@ -980,7 +980,7 @@ export default function GuidePage() {
         {/* ================================================================= */}
         {/* RIGHT MAIN CONTENT AREA */}
         {/* ================================================================= */}
-        <main className="flex-1 p-3.5 sm:p-6 lg:p-10 overflow-y-auto max-w-5xl">
+        <main className="flex-1 p-3.5 sm:p-6 lg:p-10 overflow-y-auto w-full">
           {/* =============================================================== */}
           {/* 1. OVERVIEW PAGE (1:1 Match with Zoho Reference Image 4) */}
           {/* =============================================================== */}

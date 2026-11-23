@@ -1,50 +1,16 @@
 import React from "react";
+import { Loader2 } from "lucide-react";
 
-export default function DashboardLoading() {
+export default function NormalLoading() {
   return (
-    <div className="space-y-6 animate-pulse">
-      {/* Header Skeleton */}
-      <div className="h-16 border-b border-[var(--border)] flex items-center justify-between px-2">
-        <div className="h-6 w-56 bg-slate-800/80 rounded-lg"></div>
-        <div className="h-8 w-36 bg-slate-800/60 rounded-full"></div>
-      </div>
-
-      {/* KPI Cards Skeleton */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4">
-        {[1, 2, 3, 4].map((i) => (
-          <div
-            key={i}
-            className="p-4 sm:p-5 rounded-xl border border-[var(--border)] bg-[var(--card)]/60 space-y-3"
-          >
-            <div className="flex items-center justify-between">
-              <div className="h-3.5 w-28 bg-slate-800 rounded"></div>
-              <div className="w-8 h-8 rounded-lg bg-slate-800/80"></div>
-            </div>
-            <div className="h-7 w-32 bg-slate-700/80 rounded"></div>
-            <div className="h-3 w-40 bg-slate-800/60 rounded"></div>
-          </div>
-        ))}
-      </div>
-
-      {/* Charts Section Skeleton */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        <div className="lg:col-span-8 p-5 rounded-xl border border-[var(--border)] bg-[var(--card)]/60 space-y-4">
-          <div className="h-4 w-40 bg-slate-800 rounded"></div>
-          <div className="h-56 bg-slate-900/50 rounded-lg"></div>
+    <div className="w-full min-h-[50vh] flex flex-col items-center justify-center p-6 sm:p-12 animate-in fade-in duration-150">
+      <div className="flex flex-col items-center gap-3.5 p-6 sm:p-8 rounded-2xl bg-[var(--card)]/80 border border-[var(--border)] shadow-xl backdrop-blur max-w-sm w-full text-center">
+        <div className="w-12 h-12  flex items-center justify-center text-blue-500">
+          <Loader2 className="w-6 h-6 animate-spin" />
         </div>
-        <div className="lg:col-span-4 p-5 rounded-xl border border-[var(--border)] bg-[var(--card)]/60 space-y-4">
-          <div className="h-4 w-32 bg-slate-800 rounded"></div>
-          <div className="h-56 bg-slate-900/50 rounded-lg"></div>
-        </div>
-      </div>
-
-      {/* Recent Orders Skeleton */}
-      <div className="p-5 rounded-xl border border-[var(--border)] bg-[var(--card)]/60 space-y-4">
-        <div className="h-4 w-48 bg-slate-800 rounded"></div>
-        <div className="space-y-3 pt-2">
-          {[1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="h-10 bg-slate-800/40 rounded-lg"></div>
-          ))}
+        <div className="space-y-1">
+          <h3 className="text-sm font-semibold text-[var(--foreground)]">Loading...</h3>
+          {/* <p className="text-xs text-[var(--muted-foreground)]">Please wait while data is being loaded</p> */}
         </div>
       </div>
     </div>

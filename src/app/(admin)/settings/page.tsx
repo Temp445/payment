@@ -182,7 +182,7 @@ export default function SettingsPage() {
     <>
       <Header title="System & Dynamic Runtime Settings" />
 
-      <div className="max-w-4xl w-full mx-auto space-y-4 sm:space-y-6">
+      <div className="w-full space-y-4 sm:space-y-6">
         {/* Navigation Tabs under Settings */}
         <div className="flex items-center gap-2 border-b border-[var(--border)] pb-3">
           <Link

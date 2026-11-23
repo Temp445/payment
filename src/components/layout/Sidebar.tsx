@@ -14,11 +14,13 @@ import {
   CreditCard,
   BookOpen,
   Settings,
+  UserCircle,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSidebar } from "./SidebarContext";
 import { createClient } from "@/lib/supabase/client";
+import { ThemeToggle } from "@/components/theme/ThemeToggle";
 
 interface NavItem {
   label: string;
@@ -38,6 +40,7 @@ const navItems: NavItem[] = [
   { label: "Outbox Queue", href: "/outbox", icon: Send },
   { label: "Audit Logs", href: "/audit-logs", icon: ShieldCheck },
   { label: "System Settings", href: "/settings", icon: Settings, adminOnly: true },
+  { label: "User Profile", href: "/profile", icon: UserCircle },
 ];
 
 export function Sidebar() {
@@ -49,7 +52,7 @@ export function Sidebar() {
     const supabase = createClient();
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (user) {
-        const role = (user.app_metadata?.role || "EMPLOYEE").toUpperCase();
+        const role = (user.app_metadata?.role || user.user_metadata?.role || "EMPLOYEE").toUpperCase();
         setUserRole(role);
       }
     });
@@ -58,7 +61,7 @@ export function Sidebar() {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
-        const role = (session.user.app_metadata?.role || "EMPLOYEE").toUpperCase();
+        const role = (session.user.app_metadata?.role || session.user.user_metadata?.role || "EMPLOYEE").toUpperCase();
         setUserRole(role);
       }
     });
@@ -144,23 +147,7 @@ export function Sidebar() {
         })}
       </nav>
 
-      {/* Footer Info */}
-      <div className="p-4 border-t border-[var(--border)] text-xs text-[var(--muted-foreground)] space-y-1 shrink-0">
-        <div className="flex items-center justify-between">
-          <span>Portal Access:</span>
-          <span
-            className={cn(
-              "font-semibold uppercase text-[11px] px-1.5 py-0.5 rounded",
-              userRole === "ADMIN"
-                ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-                : "bg-blue-500/10 text-blue-400 border border-blue-500/20"
-            )}
-          >
-            {userRole}
-          </span>
-        </div>
-        <div className="text-[10px] text-slate-500">Payment Hub Multi-Tenant v1.0.0</div>
-      </div>
+     
     </>
   );
 

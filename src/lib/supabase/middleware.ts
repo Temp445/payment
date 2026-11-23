@@ -77,12 +77,16 @@ export async function updateSession(request: NextRequest) {
   // Handle authenticated users
   if (user) {
     const appMeta = (user.app_metadata || {}) as Record<string, any>;
-    const isApproved = appMeta.is_approved === true;
-    const status = appMeta.status || (isApproved ? "ACTIVE" : "PENDING_APPROVAL");
-    const role = (appMeta.role || "EMPLOYEE").toUpperCase();
+    const userMeta = (user.user_metadata || {}) as Record<string, any>;
+    const isApproved = appMeta.is_approved === true || userMeta.is_approved === true;
+    const status = appMeta.status || userMeta.status || (isApproved ? "ACTIVE" : "PENDING_APPROVAL");
+    const role = (appMeta.role || userMeta.role || "EMPLOYEE").toUpperCase();
 
     // 1. Deactivated users cannot access the dashboard
     if (status === "DEACTIVATED") {
+      if (isAuthPage) {
+        return response;
+      }
       const redirectUrl = request.nextUrl.clone();
       redirectUrl.pathname = "/login";
       redirectUrl.searchParams.set("error", "Your account has been deactivated by an administrator.");
@@ -91,6 +95,9 @@ export async function updateSession(request: NextRequest) {
 
     // 1b. Rejected users cannot access the dashboard
     if (status === "REJECTED") {
+      if (isAuthPage) {
+        return response;
+      }
       const redirectUrl = request.nextUrl.clone();
       redirectUrl.pathname = "/login";
       redirectUrl.searchParams.set("error", "Your account registration was rejected by an administrator.");
@@ -99,6 +106,9 @@ export async function updateSession(request: NextRequest) {
 
     // 2. Unapproved users cannot access the dashboard
     if (!isApproved || status === "PENDING_APPROVAL") {
+      if (isAuthPage) {
+        return response;
+      }
       const redirectUrl = request.nextUrl.clone();
       redirectUrl.pathname = "/login";
       redirectUrl.searchParams.set("error", "Your account is pending administrator approval.");

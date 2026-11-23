@@ -3,24 +3,41 @@
 @tailwind utilities;
 
 :root {
-  --background: #0f172a;
+  /* White / Light Theme */
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --border: #e2e8f0;
+  --primary: #2563eb;
+  --primary-foreground: #ffffff;
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b;
+  --accent: #3b82f6;
+  --accent-foreground: #ffffff;
+  --radius: 0.75rem;
+}
+
+.dark {
+  /* Dark Theme */
+  --background: #070b12;
   --foreground: #f8fafc;
-  --card: #1e293b;
+  --card: #0f172a;
   --card-foreground: #f8fafc;
-  --border: #334155;
+  --border: #1e293b;
   --primary: #3b82f6;
   --primary-foreground: #ffffff;
   --muted: #1e293b;
   --muted-foreground: #94a3b8;
   --accent: #2563eb;
   --accent-foreground: #ffffff;
-  --radius: 0.75rem;
 }
 
 body {
   color: var(--foreground);
   background: var(--background);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 /* Custom scrollbars */
@@ -36,3 +53,104 @@ body {
   border-radius: 4px;
 }
 
+/* ==========================================================================
+   LIGHT / WHITE THEME ADAPTATIONS
+   ========================================================================== */
+
+html.light {
+  color-scheme: light;
+}
+
+/* Base backgrounds */
+html.light .bg-\[\#070b12\],
+html.light .bg-\[\#0b0f19\] {
+  background-color: #f8fafc !important;
+}
+
+html.light .bg-slate-900,
+html.light .bg-slate-900\/90,
+html.light .bg-slate-900\/80 {
+  background-color: #ffffff !important;
+  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.06) !important;
+}
+
+html.light .bg-slate-950,
+html.light .bg-slate-950\/60,
+html.light .bg-slate-950\/70 {
+  background-color: #f8fafc !important;
+}
+
+html.light .bg-slate-800,
+html.light .bg-slate-800\/60,
+html.light .bg-slate-800\/80 {
+  background-color: #f1f5f9 !important;
+}
+
+/* Borders */
+html.light .border-slate-800,
+html.light .border-slate-800\/80,
+html.light .border-slate-800\/60,
+html.light .border-slate-800\/40,
+html.light .border-slate-700 {
+  border-color: #e2e8f0 !important;
+}
+
+html.light .border-slate-900 {
+  border-color: #cbd5e1 !important;
+}
+
+/* Text & typography */
+html.light h1:not(.text-blue-500):not(.text-emerald-500):not(.text-red-500):not(.text-amber-500),
+html.light h2:not(.text-blue-500):not(.text-emerald-500):not(.text-red-500):not(.text-amber-500),
+html.light h3:not(.text-blue-500):not(.text-emerald-500):not(.text-red-500):not(.text-amber-500),
+html.light .text-white:not(button *):not(button):not(a.bg-blue-600 *):not(a.bg-blue-600):not(.badge *):not([class*="bg-blue-"]):not([class*="bg-emerald-"]):not([class*="bg-red-"]):not([class*="bg-amber-"]) {
+  color: #0f172a;
+}
+
+html.light .text-slate-100,
+html.light .text-slate-200 {
+  color: #1e293b;
+}
+
+html.light .text-slate-300 {
+  color: #334155;
+}
+
+html.light .text-slate-400 {
+  color: #64748b;
+}
+
+html.light .text-slate-500 {
+  color: #94a3b8;
+}
+
+/* Table rows */
+html.light tr.hover\:bg-slate-800\/40:hover,
+html.light tr.hover\:bg-slate-850\/50:hover {
+  background-color: #f1f5f9 !important;
+}
+
+/* Form controls */
+html.light input:not([type="checkbox"]):not([type="radio"]),
+html.light select,
+html.light textarea {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+
+html.light input::placeholder,
+html.light textarea::placeholder {
+  color: #94a3b8 !important;
+}
+
+html.light input:disabled,
+html.light select:disabled {
+  background-color: #f1f5f9 !important;
+  color: #64748b !important;
+}
+
+/* Hero banner gradient in light mode */
+html.light .from-slate-900.via-slate-900 {
+  background-image: linear-gradient(to right, #ffffff, #f8fafc, #eff6ff) !important;
+}

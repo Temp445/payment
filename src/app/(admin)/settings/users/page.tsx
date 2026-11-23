@@ -346,7 +346,7 @@ export default function UsersSettingsPage() {
     <>
       <Header title="User Management & Role Permissions" />
 
-      <div className="max-w-6xl w-full mx-auto space-y-4 sm:space-y-6">
+      <div className="w-full space-y-4 sm:space-y-6">
         {/* Navigation Tabs under Settings */}
         <div className="flex items-center gap-2 border-b border-[var(--border)] pb-3 overflow-x-auto no-scrollbar">
           <Link
@@ -541,13 +541,13 @@ export default function UsersSettingsPage() {
                 <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin text-blue-400" : ""}`} />
               </button>
 
-              <button
+              {/* <button
                 onClick={() => setShowInviteModal(true)}
                 className="flex-1 sm:flex-none px-3.5 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs flex items-center justify-center gap-1.5 transition shadow shrink-0"
               >
                 <UserPlus className="w-3.5 h-3.5" />
                 <span>Invite User</span>
-              </button>
+              </button> */}
             </div>
           </div>
 

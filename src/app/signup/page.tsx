@@ -4,7 +4,16 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { CreditCard, Mail, Lock, ArrowRight, AlertCircle, CheckCircle2, ShieldAlert, RefreshCw } from "lucide-react";
+import {
+  CreditCard,
+  Mail,
+  Lock,
+  ArrowRight,
+  AlertCircle,
+  CheckCircle2,
+  ShieldAlert,
+  RefreshCw,
+} from "lucide-react";
 
 export default function SignUpPage() {
   const router = useRouter();
@@ -15,6 +24,9 @@ export default function SignUpPage() {
   const [loading, setLoading] = useState(false);
   const [checkingLock, setCheckingLock] = useState(true);
   const [isLocked, setIsLocked] = useState(false);
+  const [isFirstUser, setIsFirstUser] = useState(false);
+  const [isFirstAdminSuccess, setIsFirstAdminSuccess] = useState(false);
+  const [isAutoLoggedIn, setIsAutoLoggedIn] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -29,8 +41,13 @@ export default function SignUpPage() {
     try {
       const res = await fetch("/api/v1/auth/signup-status");
       const data = await res.json();
-      if (data.success && data.allowPublicSignup === false) {
-        setIsLocked(true);
+      if (data.success) {
+        if (data.isFirstUser) {
+          setIsFirstUser(true);
+          setIsLocked(false);
+        } else if (data.allowPublicSignup === false) {
+          setIsLocked(true);
+        }
       }
     } catch {
       // Default to unlocked if network check fails
@@ -45,8 +62,10 @@ export default function SignUpPage() {
     setLoading(true);
     setError(null);
     setSuccessMessage(null);
+    setIsFirstAdminSuccess(false);
+    setIsAutoLoggedIn(false);
 
-    if (isLocked) {
+    if (isLocked && !isFirstUser) {
       setError("Registration is locked by the administrator.");
       setLoading(false);
       return;
@@ -65,16 +84,20 @@ export default function SignUpPage() {
     }
 
     try {
-      // Users always sign up as EMPLOYEE with PENDING_APPROVAL status
+      // If zero users exist initially, sign up with ADMIN role intention
+      const targetRole = isFirstUser ? "ADMIN" : "EMPLOYEE";
+      const targetStatus = isFirstUser ? "ACTIVE" : "PENDING_APPROVAL";
+      const targetApproved = isFirstUser;
+
       const { data, error: signUpError } = await supabase.auth.signUp({
         email: email.trim(),
         password,
         options: {
           emailRedirectTo: `${window.location.origin}/auth/callback`,
           data: {
-            role: "EMPLOYEE",
-            status: "PENDING_APPROVAL",
-            is_approved: false,
+            role: targetRole,
+            status: targetStatus,
+            is_approved: targetApproved,
           },
         },
       });
@@ -84,7 +107,58 @@ export default function SignUpPage() {
         return;
       }
 
-      // Immediately sign out to prevent auto-login before admin approval
+      const createdUserId = data?.user?.id;
+
+      // Call server endpoint to verify qualification and promote first user to Admin
+      let becameFirstAdmin = false;
+      if (createdUserId) {
+        try {
+          const promoRes = await fetch("/api/v1/auth/signup-status", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ userId: createdUserId }),
+          });
+          const promoData = await promoRes.json();
+          if (promoData.success && promoData.isFirstAdmin) {
+            becameFirstAdmin = true;
+          }
+        } catch (postErr) {
+          console.warn("Could not execute post-signup admin check:", postErr);
+        }
+      }
+
+      // If this is the initial first user, grant immediate Admin access without pending approval
+      if (becameFirstAdmin || isFirstUser) {
+        setIsFirstAdminSuccess(true);
+
+        // Sign in immediately so the local session contains updated ADMIN app_metadata
+        try {
+          const { data: signInData, error: signInErr } = await supabase.auth.signInWithPassword({
+            email: email.trim(),
+            password,
+          });
+
+          if (!signInErr && signInData?.session) {
+            setIsAutoLoggedIn(true);
+            setSuccessMessage(
+              "Administrator account created and activated successfully! You are the primary administrator with full system access."
+            );
+            setTimeout(() => {
+              window.location.href = "/";
+            }, 1800);
+            return;
+          }
+        } catch {
+          // Fall back to manual sign-in prompt if email confirmation is required
+        }
+
+        setSuccessMessage(
+          "Administrator account created successfully! As the initial user, you have full administrator privileges. You can now sign in."
+        );
+        return;
+      }
+
+      // Subsequent users: Immediately sign out to prevent auto-login before admin approval
       await supabase.auth.signOut();
 
       setSuccessMessage(
@@ -121,7 +195,7 @@ export default function SignUpPage() {
             <RefreshCw className="w-4 h-4 animate-spin text-blue-500" />
             Verifying system registration policies...
           </div>
-        ) : isLocked ? (
+        ) : isLocked && !isFirstUser ? (
           <div className="space-y-5 text-center py-4">
             <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 mx-auto">
               <ShieldAlert className="w-6 h-6" />
@@ -141,25 +215,56 @@ export default function SignUpPage() {
           </div>
         ) : successMessage ? (
           <div className="space-y-4">
-            <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs flex items-start gap-3 leading-relaxed">
-              <CheckCircle2 className="w-5 h-5 shrink-0 mt-0.5 text-amber-400" />
-              <span>{successMessage}</span>
-            </div>
+            {isFirstAdminSuccess ? (
+              <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs flex items-start gap-3 leading-relaxed">
+                <CheckCircle2 className="w-5 h-5 shrink-0 mt-0.5 text-emerald-400" />
+                <div>
+                  <div className="font-semibold text-emerald-200 mb-1 text-sm">
+                    Administrator Account Active
+                  </div>
+                  <span>{successMessage}</span>
+                  {isAutoLoggedIn && (
+                    <div className="mt-2 text-emerald-400/80 text-[11px] flex items-center gap-1.5">
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      Redirecting to Dashboard...
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs flex items-start gap-3 leading-relaxed">
+                <CheckCircle2 className="w-5 h-5 shrink-0 mt-0.5 text-amber-400" />
+                <span>{successMessage}</span>
+              </div>
+            )}
+
             <Link
-              href="/login?notice=pending_approval"
+              href={
+                isFirstAdminSuccess
+                  ? isAutoLoggedIn
+                    ? "/"
+                    : "/login?notice=admin_created"
+                  : "/login?notice=pending_approval"
+              }
               className="block w-full py-2.5 text-center rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-sm transition"
             >
-              Back to Sign In
+              {isFirstAdminSuccess
+                ? isAutoLoggedIn
+                  ? "Go to Dashboard"
+                  : "Sign In as Administrator"
+                : "Back to Sign In"}
             </Link>
           </div>
         ) : (
           <form onSubmit={handleSignUp} className="space-y-4">
-            <div className="p-3 rounded-xl bg-blue-950/30 border border-blue-900/40 text-[11px] text-blue-300 flex items-start gap-2">
-              <ShieldAlert className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
-              <span>
-                New accounts require administrator approval before access is granted. Self-registration with Admin privileges is restricted.
-              </span>
-            </div>
+            {!isFirstUser && (
+              <div className="p-3 rounded-xl bg-blue-950/30 border border-blue-900/40 text-[11px] text-blue-300 flex items-start gap-2">
+                <ShieldAlert className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
+                <span>
+                  New accounts require administrator approval before access is granted. Self-registration with Admin privileges is restricted.
+                </span>
+              </div>
+            )}
 
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1.5">Email address</label>
@@ -211,7 +316,7 @@ export default function SignUpPage() {
               disabled={loading}
               className="w-full py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-semibold text-sm transition shadow-lg shadow-blue-600/20 flex items-center justify-center gap-2 cursor-pointer mt-2"
             >
-              {loading ? "Submitting for Approval..." : "Register Account"}
+              {loading ? "Registering..." : "Register Account"}
               {!loading && <ArrowRight className="w-4 h-4" />}
             </button>
           </form>

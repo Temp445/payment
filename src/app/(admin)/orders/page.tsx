@@ -16,7 +16,8 @@ export default async function OrdersPage() {
   } = await supabase.auth.getUser();
 
   const appMeta = (user?.app_metadata || {}) as Record<string, any>;
-  const role: "ADMIN" | "EMPLOYEE" = (appMeta.role || "EMPLOYEE").toUpperCase() === "ADMIN" ? "ADMIN" : "EMPLOYEE";
+  const userMeta = (user?.user_metadata || {}) as Record<string, any>;
+  const role: "ADMIN" | "EMPLOYEE" = (appMeta.role || userMeta.role || "EMPLOYEE").toUpperCase() === "ADMIN" ? "ADMIN" : "EMPLOYEE";
   const userAllowedAppIds: string[] = Array.isArray(appMeta.allowed_app_ids) ? appMeta.allowed_app_ids : [];
 
   const whereClause: any = {};

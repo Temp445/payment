@@ -28,7 +28,7 @@ async function verifyIsAdmin(req: NextRequest) {
   } = await supabase.auth.getUser();
 
   if (user) {
-    const role = (user.app_metadata?.role || "EMPLOYEE").toUpperCase();
+    const role = (user.app_metadata?.role || user.user_metadata?.role || "EMPLOYEE").toUpperCase();
     if (role === "ADMIN") {
       return { authorized: true, callerUser: user };
     }
@@ -44,7 +44,7 @@ async function verifyIsAdmin(req: NextRequest) {
   // Same-origin browser request from logged-in admin
   const secFetchSite = req.headers.get("sec-fetch-site");
   if ((secFetchSite === "same-origin" || secFetchSite === "same-site") && user) {
-    const role = (user.app_metadata?.role || "EMPLOYEE").toUpperCase();
+    const role = (user.app_metadata?.role || user.user_metadata?.role || "EMPLOYEE").toUpperCase();
     if (role === "ADMIN") {
       return { authorized: true, callerUser: user };
     }
@@ -107,12 +107,12 @@ export async function GET(req: NextRequest) {
           : {};
 
       // Determine role: default to EMPLOYEE unless explicitly assigned ADMIN
-      const role = (appMeta.role || (u.is_super_admin ? "ADMIN" : "EMPLOYEE")).toUpperCase();
+      const role = (appMeta.role || userMeta.role || (u.is_super_admin ? "ADMIN" : "EMPLOYEE")).toUpperCase();
 
       // Determine approval and active status
       // Default new self-signups to PENDING_APPROVAL unless approved
-      const isApproved = appMeta.is_approved === true || u.is_super_admin === true;
-      const status = appMeta.status || (isApproved ? "ACTIVE" : "PENDING_APPROVAL");
+      const isApproved = appMeta.is_approved === true || userMeta.is_approved === true || u.is_super_admin === true;
+      const status = appMeta.status || userMeta.status || (isApproved ? "ACTIVE" : "PENDING_APPROVAL");
 
       const allowedAppIds = Array.isArray(appMeta.allowed_app_ids)
         ? appMeta.allowed_app_ids

@@ -4,7 +4,7 @@ import React, { useState, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { CreditCard, Mail, Lock, ArrowRight, AlertCircle } from "lucide-react";
+import { CreditCard, Mail, Lock, ArrowRight, AlertCircle, CheckCircle2 } from "lucide-react";
 
 function LoginForm() {
   const router = useRouter();
@@ -20,6 +20,8 @@ function LoginForm() {
   const [notice, setNotice] = useState<string | null>(
     urlNotice === "pending_approval"
       ? "Account created successfully! Your account is pending administrator approval before you can sign in."
+      : urlNotice === "admin_created"
+      ? "Administrator account created successfully! You can now sign in with your credentials."
       : urlNotice
   );
 
@@ -43,9 +45,11 @@ function LoginForm() {
       }
 
       if (data.session) {
-        const appMeta = (data.session.user.app_metadata || {}) as Record<string, any>;
-        const isApproved = appMeta.is_approved === true;
-        const status = appMeta.status || (isApproved ? "ACTIVE" : "PENDING_APPROVAL");
+        let appMeta = (data.session.user.app_metadata || {}) as Record<string, any>;
+        const userMeta = (data.session.user.user_metadata || {}) as Record<string, any>;
+        let isApproved = appMeta.is_approved === true || userMeta.is_approved === true;
+        let status = appMeta.status || userMeta.status || (isApproved ? "ACTIVE" : "PENDING_APPROVAL");
+        const role = (appMeta.role || userMeta.role || "EMPLOYEE").toUpperCase();
 
         if (status === "DEACTIVATED") {
           await supabase.auth.signOut();
@@ -60,6 +64,22 @@ function LoginForm() {
         }
 
         if (!isApproved || status === "PENDING_APPROVAL") {
+          // Safeguard: Check if this user qualifies as the first admin (zero admins exist)
+          try {
+            const promoRes = await fetch("/api/v1/auth/signup-status", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ userId: data.session.user.id }),
+            });
+            const promoData = await promoRes.json();
+            if (promoData.success && promoData.isFirstAdmin) {
+              window.location.href = next;
+              return;
+            }
+          } catch {
+            // Ignore and fall back to pending approval block
+          }
+
           await supabase.auth.signOut();
           setError("Your account is pending administrator approval. You will be able to log in once an administrator approves your account.");
           return;
@@ -88,8 +108,18 @@ function LoginForm() {
         </div>
 
         {notice && (
-          <div className="mb-6 p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs flex items-center gap-2.5">
-            <AlertCircle className="w-4 h-4 shrink-0 text-amber-400" />
+          <div
+            className={`mb-6 p-3.5 rounded-xl text-xs flex items-center gap-2.5 ${
+              urlNotice === "admin_created"
+                ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-300"
+                : "bg-amber-500/10 border border-amber-500/20 text-amber-300"
+            }`}
+          >
+            {urlNotice === "admin_created" ? (
+              <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+            ) : (
+              <AlertCircle className="w-4 h-4 shrink-0 text-amber-400" />
+            )}
             <span>{notice}</span>
           </div>
         )}
@@ -176,4 +206,3 @@ export default function LoginPage() {
     </Suspense>
   );
 }
-
