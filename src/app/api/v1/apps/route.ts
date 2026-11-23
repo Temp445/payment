@@ -9,10 +9,14 @@ const createAppSchema = z.object({
   appCode: z
     .string()
     .trim()
-    .min(2)
-    .max(20)
-    .regex(/^[A-Za-z0-9_]+$/, "App Code must be uppercase alphanumeric and underscores")
-    .transform((val) => val.toUpperCase()),
+    .transform((val) => val.toUpperCase().replace(/\s+/g, "_"))
+    .pipe(
+      z
+        .string()
+        .min(2)
+        .max(20)
+        .regex(/^[A-Za-z0-9_]+$/, "App Code must be uppercase alphanumeric and underscores")
+    ),
   appName: z.string().trim().min(2).max(100),
   webhookUrl: z
     .string()

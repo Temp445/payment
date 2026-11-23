@@ -17,8 +17,7 @@ export class OutboxWorker {
       const items = await prisma.webhookOutboxQueue.findMany({
         where: {
           status: { in: ["PENDING", "PROCESSING"] },
-          nextRetryAt: { lte: now },Onboard New Application
-
+          nextRetryAt: { lte: now },
           attempts: { lt: this.maxRetries },
         },
         include: {

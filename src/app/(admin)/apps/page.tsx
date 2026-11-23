@@ -86,7 +86,7 @@ export default function ApplicationsPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          appCode: appCode.trim(),
+          appCode: appCode.trim().toUpperCase().replace(/\s+/g, "_"),
           appName: appName.trim(),
           webhookUrl: webhookUrl.trim() || undefined,
         }),
@@ -507,7 +507,7 @@ export default function ApplicationsPage() {
                     type="text"
                     required
                     value={appCode}
-                    onChange={(e) => setAppCode(e.target.value.toUpperCase())}
+                    onChange={(e) => setAppCode(e.target.value.toUpperCase().replace(/\s+/g, "_"))}
                     placeholder="ACE_PAYROLL"
                     className="w-full px-3 py-2 rounded-lg bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)] font-mono focus:outline-none focus:border-blue-500"
                   />
