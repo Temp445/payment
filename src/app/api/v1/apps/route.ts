@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAdminAuth, hashSecret } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { createClient } from "@/lib/supabase/server";
 import crypto from "crypto";
 import { z } from "zod";
 
@@ -29,7 +30,22 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
     }
 
+    const supabase = createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    const appMeta = (user?.app_metadata || {}) as Record<string, any>;
+    const role: "ADMIN" | "EMPLOYEE" = (appMeta.role || "EMPLOYEE").toUpperCase() === "ADMIN" ? "ADMIN" : "EMPLOYEE";
+    const userAllowedAppIds: string[] = Array.isArray(appMeta.allowed_app_ids) ? appMeta.allowed_app_ids : [];
+
+    const appsWhere: any = {};
+    if (role === "EMPLOYEE") {
+      appsWhere.id = { in: userAllowedAppIds.length > 0 ? userAllowedAppIds : ["00000000-0000-0000-0000-000000000000"] };
+    }
+
     const apps = await prisma.application.findMany({
+      where: appsWhere,
       orderBy: { createdAt: "asc" },
       include: {
         _count: {
@@ -41,7 +57,7 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    return NextResponse.json({ success: true, count: apps.length, apps });
+    return NextResponse.json({ success: true, count: apps.length, apps, userRole: role });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
@@ -52,6 +68,20 @@ export async function POST(req: NextRequest) {
     const authHeader = req.headers.get("authorization");
     if (!verifyAdminAuth(authHeader, req)) {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
+
+    const supabase = createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user) {
+      const role = (user.app_metadata?.role || "EMPLOYEE").toUpperCase();
+      if (role !== "ADMIN") {
+        return NextResponse.json(
+          { success: false, error: "Forbidden. Only administrators can create applications." },
+          { status: 403 }
+        );
+      }
     }
 
     const body = await req.json();

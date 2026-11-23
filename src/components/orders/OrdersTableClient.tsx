@@ -53,7 +53,11 @@ export function OrdersTableClient({ initialOrders }: OrdersTableClientProps) {
         o.cfOrderId?.toLowerCase().includes(term) ||
         (o.customerPhone && o.customerPhone.includes(term)) ||
         (o.customerName && o.customerName.toLowerCase().includes(term)) ||
-        (o.application?.appCode && o.application.appCode.toLowerCase().includes(term));
+        (o.application?.appCode && o.application.appCode.toLowerCase().includes(term)) ||
+        (Array.isArray(o.payments) &&
+          o.payments.some(
+            (p: any) => p.cfPaymentId && String(p.cfPaymentId).toLowerCase().includes(term)
+          ));
 
       const displayStatus = getOrderDisplayStatus(o);
       const matchesStatus =
@@ -222,11 +226,11 @@ export function OrdersTableClient({ initialOrders }: OrdersTableClientProps) {
       {/* Search and Filters */}
       <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3">
         {/* Search input */}
-        <div className="relative w-full xl:w-72">
+        <div className="relative w-full xl:w-80">
           <Search className="w-4 h-4 text-[var(--muted-foreground)] absolute left-3 top-2.5" />
           <input
             type="text"
-            placeholder="Search order ID, phone, customer, app..."
+            placeholder="Search Order ID, CF Order ID, Payment ID, phone..."
             value={searchTerm}
             onChange={(e) => handleSearchChange(e.target.value)}
             className="w-full pl-9 pr-3 py-2 rounded-lg bg-[var(--card)] border border-[var(--border)] text-xs text-[var(--foreground)] focus:outline-none focus:border-blue-500"
@@ -334,7 +338,7 @@ export function OrdersTableClient({ initialOrders }: OrdersTableClientProps) {
             <thead>
               <tr className="border-b border-[var(--border)] text-[var(--muted-foreground)]">
                 <th className="pb-3 font-semibold">Order ID</th>
-                <th className="pb-3 font-semibold">Cashfree Order ID</th>
+                <th className="pb-3 font-semibold">Cashfree Order / Payment ID</th>
                 <th className="pb-3 font-semibold">App Code</th>
                 <th className="pb-3 font-semibold">Customer</th>
                 <th className="pb-3 font-semibold">Amount</th>
@@ -352,18 +356,50 @@ export function OrdersTableClient({ initialOrders }: OrdersTableClientProps) {
                   </td>
                 </tr>
               ) : (
-                paginatedOrders.map((order) => (
-                  <tr
-                    key={order.id}
-                    onClick={() => setSelectedOrder(order)}
-                    className="hover:bg-slate-800/40 cursor-pointer transition"
-                  >
-                    <td className="py-3 font-mono font-bold text-white">
-                      {order.appOrderId}
-                    </td>
-                    <td className="py-3 font-mono text-[var(--muted-foreground)] text-[11px]">
-                      {order.cfOrderId}
-                    </td>
+                paginatedOrders.map((order) => {
+                  const paymentIds = Array.isArray(order.payments)
+                    ? order.payments
+                        .map((p: any) => p.cfPaymentId)
+                        .filter((id: any) => Boolean(id))
+                    : [];
+
+                  return (
+                    <tr
+                      key={order.id}
+                      onClick={() => setSelectedOrder(order)}
+                      className="hover:bg-slate-800/40 cursor-pointer transition"
+                    >
+                      <td className="py-3 font-mono font-bold text-white">
+                        {order.appOrderId}
+                      </td>
+                      <td className="py-3 font-mono text-[11px]">
+                        <div
+                          className="text-[var(--foreground)] font-medium truncate max-w-[210px]"
+                          title={`Cashfree Order ID: ${order.cfOrderId}`}
+                        >
+                          {order.cfOrderId}
+                        </div>
+                        {paymentIds.length > 0 ? (
+                          <div
+                            className="flex items-center gap-1 text-[10px] text-emerald-400 mt-0.5"
+                            title={`Cashfree Payment ID: ${paymentIds.join(", ")}`}
+                          >
+                            <span className="text-[var(--muted-foreground)]">Pay ID:</span>
+                            <span className="font-semibold text-emerald-300 font-mono select-all">
+                              {paymentIds[0]}
+                            </span>
+                            {paymentIds.length > 1 && (
+                              <span className="text-[9px] px-1 py-0.2 rounded bg-slate-800 text-slate-300 border border-slate-700">
+                                +{paymentIds.length - 1}
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="text-[10px] text-slate-500 italic mt-0.5">
+                            No payment ID
+                          </div>
+                        )}
+                      </td>
                     <td className="py-3">
                       <span className="font-semibold text-blue-400">
                         {order.application?.appCode}
@@ -442,8 +478,9 @@ export function OrdersTableClient({ initialOrders }: OrdersTableClientProps) {
                       );
                     })()}
                   </tr>
-                ))
-              )}
+                );
+              })
+            )}
             </tbody>
           </table>
         </div>

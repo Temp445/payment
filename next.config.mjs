@@ -2,6 +2,14 @@
 const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  webpack: (config, { dev }) => {
+    if (dev) {
+      config.infrastructureLogging = {
+        level: "error",
+      };
+    }
+    return config;
+  },
   async redirects() {
     return [
       {

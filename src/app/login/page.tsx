@@ -11,11 +11,17 @@ function LoginForm() {
   const searchParams = useSearchParams();
   const next = searchParams.get("next") || "/";
   const urlError = searchParams.get("error");
+  const urlNotice = searchParams.get("notice");
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(urlError);
+  const [notice, setNotice] = useState<string | null>(
+    urlNotice === "pending_approval"
+      ? "Account created successfully! Your account is pending administrator approval before you can sign in."
+      : urlNotice
+  );
 
   const supabase = createClient();
 
@@ -23,6 +29,7 @@ function LoginForm() {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    setNotice(null);
 
     try {
       const { data, error: signInError } = await supabase.auth.signInWithPassword({
@@ -36,8 +43,30 @@ function LoginForm() {
       }
 
       if (data.session) {
-        router.push(next);
-        router.refresh();
+        const appMeta = (data.session.user.app_metadata || {}) as Record<string, any>;
+        const isApproved = appMeta.is_approved === true;
+        const status = appMeta.status || (isApproved ? "ACTIVE" : "PENDING_APPROVAL");
+
+        if (status === "DEACTIVATED") {
+          await supabase.auth.signOut();
+          setError("Your account has been deactivated by an administrator. Please contact your admin for access.");
+          return;
+        }
+
+        if (status === "REJECTED") {
+          await supabase.auth.signOut();
+          setError("Your account registration was rejected by an administrator. Please contact your admin for assistance.");
+          return;
+        }
+
+        if (!isApproved || status === "PENDING_APPROVAL") {
+          await supabase.auth.signOut();
+          setError("Your account is pending administrator approval. You will be able to log in once an administrator approves your account.");
+          return;
+        }
+
+        window.location.href = next;
+        return;
       }
     } catch (err: any) {
       setError(err.message || "An unexpected error occurred");
@@ -57,6 +86,13 @@ function LoginForm() {
           <h1 className="text-xl font-bold tracking-tight text-white">Payment Hub</h1>
           <p className="text-xs text-slate-400 mt-1">Sign in to manage your gateway & subscriptions</p>
         </div>
+
+        {notice && (
+          <div className="mb-6 p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs flex items-center gap-2.5">
+            <AlertCircle className="w-4 h-4 shrink-0 text-amber-400" />
+            <span>{notice}</span>
+          </div>
+        )}
 
         {error && (
           <div className="mb-6 p-3.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex items-center gap-2.5">

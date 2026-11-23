@@ -1,4 +1,4 @@
-import { createServerClient, type CookieOptions } from "@supabase/ssr";
+import { createServerClient } from "@supabase/ssr";
 import { type NextRequest, NextResponse } from "next/server";
 
 export async function updateSession(request: NextRequest) {
@@ -19,52 +19,6 @@ export async function updateSession(request: NextRequest) {
     return response;
   }
 
-  const supabase = createServerClient(url, publishableKey, {
-    cookies: {
-      get(name: string) {
-        return request.cookies.get(name)?.value;
-      },
-      set(name: string, value: string, options: CookieOptions) {
-        request.cookies.set({
-          name,
-          value,
-          ...options,
-        });
-        response = NextResponse.next({
-          request: {
-            headers: request.headers,
-          },
-        });
-        response.cookies.set({
-          name,
-          value,
-          ...options,
-        });
-      },
-      remove(name: string, options: CookieOptions) {
-        request.cookies.set({
-          name,
-          value: "",
-          ...options,
-        });
-        response = NextResponse.next({
-          request: {
-            headers: request.headers,
-          },
-        });
-        response.cookies.set({
-          name,
-          value: "",
-          ...options,
-        });
-      },
-    },
-  });
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
   const pathname = request.nextUrl.pathname;
 
   // Public paths that do not require authentication
@@ -77,9 +31,42 @@ export async function updateSession(request: NextRequest) {
 
   const isPublicPage =
     pathname.startsWith("/checkout") ||
-    pathname.startsWith("/api");
+    pathname.startsWith("/api") ||
+    pathname.startsWith("/guide");
 
-  // If user is not authenticated and trying to access protected dashboard routes
+  // Fast-path: Check if any Supabase auth cookies exist
+  const allCookies = request.cookies.getAll();
+  const hasAuthCookie = allCookies.some(
+    (c) => c.name.startsWith("sb-") || c.name.includes("auth-token")
+  );
+
+  // Bypass Supabase getUser network round-trip for public endpoints and unauthenticated visits
+  if ((isPublicPage || isAuthPage) && !hasAuthCookie) {
+    return response;
+  }
+
+  const supabase = createServerClient(url, publishableKey, {
+    cookies: {
+      getAll() {
+        return request.cookies.getAll();
+      },
+      setAll(cookiesToSet) {
+        cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
+        response = NextResponse.next({
+          request,
+        });
+        cookiesToSet.forEach(({ name, value, options }) =>
+          response.cookies.set(name, value, options)
+        );
+      },
+    },
+  });
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  // Handle unauthenticated visitors attempting to access protected routes
   if (!user && !isAuthPage && !isPublicPage) {
     const redirectUrl = request.nextUrl.clone();
     redirectUrl.pathname = "/login";
@@ -87,14 +74,54 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(redirectUrl);
   }
 
-  // If user is already authenticated and visits login/signup, redirect to dashboard
-  if (user && isAuthPage && !pathname.startsWith("/reset-password")) {
-    const redirectUrl = request.nextUrl.clone();
-    redirectUrl.pathname = "/";
-    redirectUrl.searchParams.delete("next");
-    return NextResponse.redirect(redirectUrl);
+  // Handle authenticated users
+  if (user) {
+    const appMeta = (user.app_metadata || {}) as Record<string, any>;
+    const isApproved = appMeta.is_approved === true;
+    const status = appMeta.status || (isApproved ? "ACTIVE" : "PENDING_APPROVAL");
+    const role = (appMeta.role || "EMPLOYEE").toUpperCase();
+
+    // 1. Deactivated users cannot access the dashboard
+    if (status === "DEACTIVATED") {
+      const redirectUrl = request.nextUrl.clone();
+      redirectUrl.pathname = "/login";
+      redirectUrl.searchParams.set("error", "Your account has been deactivated by an administrator.");
+      return NextResponse.redirect(redirectUrl);
+    }
+
+    // 1b. Rejected users cannot access the dashboard
+    if (status === "REJECTED") {
+      const redirectUrl = request.nextUrl.clone();
+      redirectUrl.pathname = "/login";
+      redirectUrl.searchParams.set("error", "Your account registration was rejected by an administrator.");
+      return NextResponse.redirect(redirectUrl);
+    }
+
+    // 2. Unapproved users cannot access the dashboard
+    if (!isApproved || status === "PENDING_APPROVAL") {
+      const redirectUrl = request.nextUrl.clone();
+      redirectUrl.pathname = "/login";
+      redirectUrl.searchParams.set("error", "Your account is pending administrator approval.");
+      return NextResponse.redirect(redirectUrl);
+    }
+
+    // 3. Role-Based Access Control: Only explicit EMPLOYEE role is restricted from /settings
+    const userRole = (appMeta.role || "").toUpperCase();
+    if (userRole === "EMPLOYEE" && pathname.startsWith("/settings")) {
+      const redirectUrl = request.nextUrl.clone();
+      redirectUrl.pathname = "/";
+      redirectUrl.searchParams.set("error", "Access restricted to Administrators.");
+      return NextResponse.redirect(redirectUrl);
+    }
+
+    // 4. Authenticated & approved user visiting login/signup pages redirected to dashboard
+    if (isAuthPage && !pathname.startsWith("/reset-password")) {
+      const redirectUrl = request.nextUrl.clone();
+      redirectUrl.pathname = "/";
+      redirectUrl.searchParams.delete("next");
+      return NextResponse.redirect(redirectUrl);
+    }
   }
 
   return response;
 }
-

@@ -75,9 +75,17 @@ export function OrderDetailDrawer({
                 {display.label}
               </StatusBadge>
             </div>
-            <p className="text-xs text-[var(--muted-foreground)] mt-0.5 font-mono truncate">
-              Cashfree ID: <span className="text-blue-400">{order.cfOrderId}</span>
-            </p>
+            <div className="flex flex-col gap-0.5 mt-1 text-xs font-mono">
+              <span className="text-[var(--muted-foreground)] truncate">
+                Cashfree Order ID: <span className="text-blue-400 font-medium">{order.cfOrderId}</span>
+              </span>
+              {payment?.cfPaymentId && (
+                <span className="text-emerald-400 text-[11px] truncate flex items-center gap-1">
+                  <span>Payment ID:</span>
+                  <span className="font-semibold text-emerald-300 select-all">{payment.cfPaymentId}</span>
+                </span>
+              )}
+            </div>
           </div>
 
           <div className="flex items-center gap-2 shrink-0">

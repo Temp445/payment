@@ -46,9 +46,8 @@ export default function ResetPasswordPage() {
 
       setSuccess(true);
       setTimeout(() => {
-        router.push("/");
-        router.refresh();
-      }, 2000);
+        window.location.href = "/";
+      }, 1500);
     } catch (err: any) {
       setError(err.message || "Failed to update password");
     } finally {

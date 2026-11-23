@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Shield, LogOut, User, Menu } from "lucide-react";
+import Link from "next/link";
+import { Shield, LogOut, User, Menu, LogIn } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { useSidebar } from "./SidebarContext";
@@ -10,12 +11,15 @@ export function Header({ title }: { title: string }) {
   const router = useRouter();
   const { toggleSidebar } = useSidebar();
   const [userEmail, setUserEmail] = useState<string | null>(null);
-  const supabase = createClient();
+  const [userRole, setUserRole] = useState<string>("EMPLOYEE");
 
   useEffect(() => {
+    const supabase = createClient();
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (user?.email) {
         setUserEmail(user.email);
+        const role = (user.app_metadata?.role || "EMPLOYEE").toUpperCase();
+        setUserRole(role);
       }
     });
 
@@ -23,17 +27,21 @@ export function Header({ title }: { title: string }) {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setUserEmail(session?.user?.email || null);
+      if (session?.user) {
+        const role = (session.user.app_metadata?.role || "EMPLOYEE").toUpperCase();
+        setUserRole(role);
+      }
     });
 
     return () => {
       subscription.unsubscribe();
     };
-  }, [supabase]);
+  }, []);
 
   async function handleSignOut() {
+    const supabase = createClient();
     await supabase.auth.signOut();
-    router.push("/login");
-    router.refresh();
+    window.location.href = "/login";
   }
 
   return (
@@ -63,11 +71,31 @@ export function Header({ title }: { title: string }) {
 
         {/* User Info & Sign Out */}
         {userEmail ? (
-          <div className="flex items-center gap-2 sm:gap-3 pl-2 sm:pl-3 border-l border-[var(--border)]">
+          <div className="flex items-center gap-1.5 sm:gap-3 pl-2 sm:pl-3 border-l border-[var(--border)]">
+            {/* Mobile Role Badge */}
+            <span
+              className={`md:hidden px-1.5 py-0.5 rounded text-[9px] font-bold border ${
+                userRole === "ADMIN"
+                  ? "bg-amber-500/10 text-amber-400 border-amber-500/30"
+                  : "bg-blue-500/10 text-blue-400 border-blue-500/30"
+              }`}
+            >
+              {userRole}
+            </span>
+
             <div className="hidden md:flex items-center gap-1.5 text-xs text-[var(--muted-foreground)]">
               <User className="w-3.5 h-3.5 text-blue-400 shrink-0" />
               <span className="font-medium text-[var(--foreground)] max-w-[120px] lg:max-w-[160px] truncate" title={userEmail}>
                 {userEmail}
+              </span>
+              <span
+                className={`px-1.5 py-0.5 rounded text-[10px] font-bold border ${
+                  userRole === "ADMIN"
+                    ? "bg-amber-500/10 text-amber-400 border-amber-500/30"
+                    : "bg-blue-500/10 text-blue-400 border-blue-500/30"
+                }`}
+              >
+                {userRole}
               </span>
             </div>
             <button
@@ -80,9 +108,14 @@ export function Header({ title }: { title: string }) {
             </button>
           </div>
         ) : (
-          <div className="flex items-center gap-1.5 pl-2 sm:pl-3 border-l border-[var(--border)] text-xs text-[var(--muted-foreground)]">
-            <Shield className="w-3.5 h-3.5 text-blue-400 shrink-0" />
-            <span className="font-medium text-[var(--foreground)] hidden sm:inline">Admin Portal</span>
+          <div className="flex items-center gap-2 pl-2 sm:pl-3 border-l border-[var(--border)] text-xs text-[var(--muted-foreground)]">
+            <Link
+              href="/login"
+              className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs transition shadow flex items-center gap-1.5"
+            >
+              <LogIn className="w-3.5 h-3.5" />
+              <span>Sign In</span>
+            </Link>
           </div>
         )}
       </div>

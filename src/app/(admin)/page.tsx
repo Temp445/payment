@@ -4,16 +4,68 @@ import { StatCard } from "@/components/dashboard/StatCard";
 import { VolumeChart } from "@/components/dashboard/VolumeChart";
 import { MethodPieChart } from "@/components/dashboard/MethodPieChart";
 import { StatusBadge } from "@/components/ui/Badge";
+import { AppFilterBar } from "@/components/dashboard/AppFilterBar";
 import { prisma } from "@/lib/prisma";
 import { formatCurrency, formatDate, getOrderDisplayStatus, getOrderEnvironment } from "@/lib/utils";
 import { DollarSign, Activity, Layers, Send } from "lucide-react";
 import Link from "next/link";
 import { OrderService } from "@/services/order.service";
+import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
-export default async function OverviewPage() {
-  // Fetch real-time dashboard aggregates from Supabase via Prisma
+export default async function OverviewPage({
+  searchParams,
+}: {
+  searchParams?: { app?: string };
+}) {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const appMeta = (user?.app_metadata || {}) as Record<string, any>;
+  const role: "ADMIN" | "EMPLOYEE" = (appMeta.role || "EMPLOYEE").toUpperCase() === "ADMIN" ? "ADMIN" : "EMPLOYEE";
+  const userAllowedAppIds: string[] = Array.isArray(appMeta.allowed_app_ids) ? appMeta.allowed_app_ids : [];
+
+  // 1. Fetch available apps from database
+  const allApps = await prisma.application.findMany({
+    where: { isActive: true },
+    select: { id: true, appCode: true, appName: true },
+    orderBy: { appCode: "asc" },
+  });
+
+  // Filter selectable apps for current user
+  const selectableApps =
+    role === "ADMIN"
+      ? allApps
+      : allApps.filter((a) => userAllowedAppIds.includes(a.id));
+
+  // Determine query condition based on role and selected app
+  const requestedApp = searchParams?.app;
+  let selectedAppId = "ALL";
+  let appFilterCondition: any = {};
+
+  if (role === "ADMIN") {
+    if (requestedApp && requestedApp !== "ALL") {
+      selectedAppId = requestedApp;
+      appFilterCondition = { applicationId: requestedApp };
+    }
+  } else {
+    // EMPLOYEE role: Scoped strictly to permitted applications
+    if (userAllowedAppIds.length === 0) {
+      appFilterCondition = { applicationId: "none" }; // No assigned apps
+      selectedAppId = "NONE";
+    } else if (requestedApp && userAllowedAppIds.includes(requestedApp)) {
+      selectedAppId = requestedApp;
+      appFilterCondition = { applicationId: requestedApp };
+    } else {
+      selectedAppId = userAllowedAppIds.length === 1 ? userAllowedAppIds[0] : "ALL";
+      appFilterCondition = { applicationId: { in: userAllowedAppIds } };
+    }
+  }
+
+  // Fetch real-time dashboard aggregates
   let totalVolume = 0;
   let liveVolume = 0;
   let sandboxVolume = 0;
@@ -30,12 +82,15 @@ export default async function OverviewPage() {
   let paymentMethodsData: any[] = [];
 
   try {
-    // 1. Auto-expire any unpaid ACTIVE orders older than 20 minutes
-    await OrderService.autoExpireStaleOrders(20);
-
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
     sevenDaysAgo.setHours(0, 0, 0, 0);
+
+    // Auto-expire stale orders in parallel with dashboard queries to avoid blocking
+    const expirePromise = OrderService.autoExpireStaleOrders(20).catch((e) => {
+      console.warn("Auto-expire skipped:", e.message);
+      return 0;
+    });
 
     const [
       volumeAgg,
@@ -50,20 +105,29 @@ export default async function OverviewPage() {
       recentPaidOrders,
     ] = await Promise.all([
       prisma.order.aggregate({
-        where: { orderStatus: "PAID" },
+        where: { ...appFilterCondition, orderStatus: "PAID" },
         _sum: { orderAmount: true },
       }),
       prisma.order.aggregate({
+        where: appFilterCondition,
         _sum: { orderAmount: true },
       }),
-      prisma.order.count(),
-      prisma.order.count({ where: { orderStatus: "PAID" } }),
-      prisma.application.count({ where: { isActive: true } }),
-      prisma.application.count(),
+      prisma.order.count({ where: appFilterCondition }),
+      prisma.order.count({ where: { ...appFilterCondition, orderStatus: "PAID" } }),
+      prisma.application.count({
+        where: {
+          isActive: true,
+          ...(role === "ADMIN" ? {} : { id: { in: userAllowedAppIds } }),
+        },
+      }),
+      prisma.application.count({
+        where: role === "ADMIN" ? {} : { id: { in: userAllowedAppIds } },
+      }),
       prisma.webhookOutboxQueue.count({
         where: { status: { in: ["PENDING", "PROCESSING"] } },
       }),
       prisma.order.findMany({
+        where: appFilterCondition,
         take: 8,
         orderBy: { createdAt: "desc" },
         include: {
@@ -73,16 +137,22 @@ export default async function OverviewPage() {
         },
       }),
       prisma.payment.findMany({
-        where: { paymentStatus: "SUCCESS" },
+        where: {
+          paymentStatus: "SUCCESS",
+          ...(Object.keys(appFilterCondition).length > 0 ? { order: appFilterCondition } : {}),
+        },
+        take: 300,
+        orderBy: { createdAt: "desc" },
         select: {
           paymentMethod: true,
           paymentGroup: true,
-          rawWebhookPayload: true,
         },
       }),
       prisma.order.findMany({
         where: {
+          ...appFilterCondition,
           orderStatus: "PAID",
+          createdAt: { gte: sevenDaysAgo },
         },
         select: {
           orderAmount: true,
@@ -92,6 +162,7 @@ export default async function OverviewPage() {
           cfOrderId: true,
         },
       }),
+      expirePromise,
     ]);
 
     const allPaidOrders = recentPaidOrders;
@@ -119,11 +190,7 @@ export default async function OverviewPage() {
     // Real payment methods breakdown from actual successful payments
     const methodCounts: Record<string, number> = {};
     for (const p of payments) {
-      let raw = (p.paymentMethod || p.paymentGroup || "").trim().toLowerCase();
-      if (!raw && p.rawWebhookPayload && typeof p.rawWebhookPayload === "object") {
-        const payload: any = p.rawWebhookPayload;
-        raw = (payload?.data?.payment?.payment_group || "").toLowerCase();
-      }
+      const raw = (p.paymentMethod || p.paymentGroup || "").trim().toLowerCase();
 
       let label = "Other";
       if (raw.includes("upi")) {
@@ -185,18 +252,17 @@ export default async function OverviewPage() {
       ? `${((paidOrdersCount / totalOrdersCount) * 100).toFixed(1)}%`
       : "0.0%";
 
-  const successRateTrend =
-    totalOrdersCount === 0
-      ? undefined
-      : paidOrdersCount > 0
-      ? `${paidOrdersCount} Paid`
-      : "0 Paid";
-
-  const successRatePositive = paidOrdersCount > 0;
-
   return (
     <>
       <Header title="Executive Overview & Analytics" />
+
+      {/* Application Volume Filter Bar */}
+      <AppFilterBar
+        applications={selectableApps}
+        selectedAppId={selectedAppId}
+        userRole={role}
+        isRestricted={role === "EMPLOYEE"}
+      />
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4">
@@ -217,7 +283,7 @@ export default async function OverviewPage() {
           icon={Activity}
         />
         <StatCard
-          title="Active Tenant Apps"
+          title={role === "ADMIN" ? "Active Tenant Apps" : "Permitted Apps"}
           value={activeAppsCount}
           subtitle={
             totalAppsCount === 0
@@ -247,9 +313,9 @@ export default async function OverviewPage() {
             <div>
               <h3 className="font-semibold text-sm text-[var(--foreground)]">Transaction Volume</h3>
               <p className="text-xs text-[var(--muted-foreground)]">
-                {activeAppsCount === 1
-                  ? "Processed volume for 1 active application"
-                  : `Processed volume across ${activeAppsCount} active applications`}
+                {selectedAppId !== "ALL"
+                  ? "Processed volume for selected application"
+                  : `Processed volume across ${activeAppsCount} visible applications`}
               </p>
             </div>
             <span className="text-xs font-medium px-2 py-1 rounded bg-blue-500/10 text-blue-400">
@@ -269,8 +335,8 @@ export default async function OverviewPage() {
       </div>
 
       {/* Recent Transactions Table */}
-      <div className="p-5 rounded-xl border border-[var(--border)] bg-[var(--card)] shadow-sm space-y-4">
-        <div className="flex items-center justify-between">
+      <div className="p-4 sm:p-5 rounded-xl border border-[var(--border)] bg-[var(--card)] shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
           <div>
             <h3 className="font-semibold text-sm text-[var(--foreground)]">Recent Orders & Transactions</h3>
             <p className="text-xs text-[var(--muted-foreground)]">
@@ -293,7 +359,6 @@ export default async function OverviewPage() {
                 <th className="pb-3 font-semibold">Application</th>
                 <th className="pb-3 font-semibold">Customer</th>
                 <th className="pb-3 font-semibold">Amount</th>
-                {/* <th className="pb-3 font-semibold">Env</th> */}
                 <th className="pb-3 font-semibold">Status</th>
                 <th className="pb-3 font-semibold">Date</th>
               </tr>
@@ -301,18 +366,26 @@ export default async function OverviewPage() {
             <tbody className="divide-y divide-[var(--border)]">
               {recentOrders.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-6 text-center text-[var(--muted-foreground)]">
-                    No transactions yet. Start by sending an order from APP001 or Website 01!
+                  <td colSpan={6} className="py-6 text-center text-[var(--muted-foreground)]">
+                    {role === "EMPLOYEE" && userAllowedAppIds.length === 0
+                      ? "No applications assigned to your account. Please contact an admin."
+                      : "No transactions found for the selected application criteria."}
                   </td>
                 </tr>
               ) : (
                 recentOrders.map((order) => {
                   const display = getOrderDisplayStatus(order);
-                  const isLive = getOrderEnvironment(order) === "production";
                   return (
                     <tr key={order.id} className="hover:bg-slate-800/40">
-                      <td className="py-3 font-mono font-medium text-[var(--foreground)]">
-                        {order.appOrderId}
+                      <td className="py-3 font-mono">
+                        <div className="font-medium text-[var(--foreground)] truncate max-w-[180px]" title={order.appOrderId}>
+                          {order.appOrderId}
+                        </div>
+                        {order.payments?.[0]?.cfPaymentId && (
+                          <div className="text-[10px] text-emerald-400 mt-0.5 truncate" title={`Cashfree Payment ID: ${order.payments[0].cfPaymentId}`}>
+                            Pay ID: <span className="font-semibold text-emerald-300">{order.payments[0].cfPaymentId}</span>
+                          </div>
+                        )}
                       </td>
                       <td className="py-3">
                         <span className="font-semibold text-blue-400">
@@ -325,19 +398,6 @@ export default async function OverviewPage() {
                       <td className="py-3 font-semibold text-[var(--foreground)]">
                         {formatCurrency(order.orderAmount)}
                       </td>
-                      {/* <td className="py-3">
-                        {isLive ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-                            LIVE
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
-                            SANDBOX
-                          </span>
-                        )}
-                      </td> */}
                       <td className="py-3">
                         <StatusBadge status={display.badgeStatus}>
                           {display.label}
@@ -357,4 +417,3 @@ export default async function OverviewPage() {
     </>
   );
 }
-
