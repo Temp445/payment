@@ -258,7 +258,7 @@ export default function SettingsPage() {
         ) : (
           <>
             {/* Banner */}
-            <div className="p-4 rounded-xl bg-blue-950/30 border border-blue-800/40 flex items-start gap-3">
+            {/* <div className="p-4 rounded-xl bg-blue-950/30 border border-blue-800/40 flex items-start gap-3">
               <Database className="w-5 h-5 text-blue-400 mt-0.5 shrink-0" />
               <div className="text-xs space-y-1">
                 <h3 className="font-semibold text-blue-200">Database-Backed Dynamic Configuration</h3>
@@ -267,7 +267,7 @@ export default function SettingsPage() {
                   You can switch between <strong>Cashfree Sandbox and Production</strong>, change App IDs, update Secret Keys, or manage multi-port URLs live without editing <code className="text-blue-300">.env</code> files or restarting your server.
                 </p>
               </div>
-            </div>
+            </div> */}
 
             {statusMsg && (
               <div

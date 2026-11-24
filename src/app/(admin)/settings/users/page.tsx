@@ -472,64 +472,6 @@ export default function UsersSettingsPage() {
           </Link>
         </div>
 
-        {/* Public Sign-Up Lock & Policy Card */}
-        <div className="p-4 sm:p-5 rounded-xl border border-[var(--border)] bg-[var(--card)] shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="flex items-start gap-3 min-w-0">
-            <div
-              className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-                allowPublicSignup
-                  ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-                  : "bg-red-500/10 text-red-400 border border-red-500/20"
-              }`}
-            >
-              {allowPublicSignup ? <Unlock className="w-5 h-5" /> : <Lock className="w-5 h-5" />}
-            </div>
-            <div className="space-y-0.5 min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <h3 className="font-bold text-sm text-[var(--foreground)]">Sign-Up Screen Lock</h3>
-                <span
-                  className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                    allowPublicSignup
-                      ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
-                      : "bg-red-500/10 text-red-400 border-red-500/30"
-                  }`}
-                >
-                  {allowPublicSignup ? "REGISTRATIONS OPEN" : "LOCKED"}
-                </span>
-              </div>
-              <p className="text-xs text-[var(--muted-foreground)] max-w-xl leading-relaxed">
-                {allowPublicSignup
-                  ? "Self-registration is permitted. New accounts default to Employee with Pending Approval (they cannot log in until an Admin approves them)."
-                  : "Public registration is completely locked. The /signup screen is disabled, preventing new users from registering."}
-              </p>
-            </div>
-          </div>
-
-          <button
-            onClick={handleToggleSignupLock}
-            disabled={actionLoading === "toggle-lock"}
-            className={`w-full sm:w-auto justify-center px-4 py-2.5 sm:py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition shrink-0 ${
-              allowPublicSignup
-                ? "bg-red-600/10 hover:bg-red-600/20 text-red-300 border border-red-500/30"
-                : "bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/20"
-            }`}
-          >
-            {actionLoading === "toggle-lock" ? (
-              <RefreshCw className="w-4 h-4 animate-spin" />
-            ) : allowPublicSignup ? (
-              <>
-                <Lock className="w-4 h-4" />
-                <span>Lock Sign-Up Screen</span>
-              </>
-            ) : (
-              <>
-                <Unlock className="w-4 h-4" />
-                <span>Unlock Sign-Up Screen</span>
-              </>
-            )}
-          </button>
-        </div>
-
         {/* Pending Approval Banner */}
         {pendingUsers.length > 0 && (
           <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">

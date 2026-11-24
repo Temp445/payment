@@ -26,10 +26,33 @@ function LoginForm() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [loadingState, setLoadingState] = useState<LoadingState>("idle");
   const [error, setError] = useState<string | null>(urlError);
 
+  // Zero-users smart detection state
+  const [checkingBootstrap, setCheckingBootstrap] = useState(true);
+  const [isZeroUsers, setIsZeroUsers] = useState(false);
+
   const inviteToken = searchParams.get("token");
+
+  // Check if system has 0 users initially
+  React.useEffect(() => {
+    async function checkFirstRun() {
+      try {
+        const res = await fetch("/api/v1/auth/signup-status");
+        const data = await res.json();
+        if (data.success && data.isFirstUser) {
+          setIsZeroUsers(true);
+        }
+      } catch {
+        // Fall back to normal login mode
+      } finally {
+        setCheckingBootstrap(false);
+      }
+    }
+    checkFirstRun();
+  }, []);
 
   // If user arrives at /login with an invite token, forward them directly to /invite
   React.useEffect(() => {
@@ -55,6 +78,86 @@ function LoginForm() {
     setError(null);
     setNotice(null);
 
+    // MODE 1: ZERO USERS - INITIALIZE MASTER ADMIN
+    if (isZeroUsers) {
+      if (password !== confirmPassword) {
+        setError("Passwords do not match.");
+        setLoadingState("idle");
+        return;
+      }
+      if (password.length < 6) {
+        setError("Password must be at least 6 characters long.");
+        setLoadingState("idle");
+        return;
+      }
+
+      try {
+        // Step 1: Sign up through Supabase client with public anon key
+        const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({
+          email: email.trim(),
+          password,
+          options: {
+            data: {
+              role: "ADMIN",
+              status: "ACTIVE",
+              is_approved: true,
+            },
+          },
+        });
+
+        if (signUpErr) {
+          setError(signUpErr.message);
+          setLoadingState("idle");
+          return;
+        }
+
+        const createdUser = signUpData.user;
+        if (!createdUser) {
+          setError("Failed to create admin user record. Please try again.");
+          setLoadingState("idle");
+          return;
+        }
+
+        // Step 2: Elevate to active Master Admin in database (confirms email & sets ADMIN role)
+        const promoRes = await fetch("/api/v1/auth/signup-status", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId: createdUser.id }),
+        });
+
+        const promoData = await promoRes.json();
+        if (!promoData.success) {
+          setError(promoData.error || "Failed to finalize admin privileges.");
+          setLoadingState("idle");
+          return;
+        }
+
+        // Step 3: Sign in directly
+        setLoadingState("authorizing");
+        const { error: signInErr } = await supabase.auth.signInWithPassword({
+          email: email.trim(),
+          password,
+        });
+
+        if (signInErr) {
+          setError("Admin account created! Please sign in with your credentials.");
+          setIsZeroUsers(false);
+          setLoadingState("idle");
+          return;
+        }
+
+        setLoadingState("redirecting");
+        router.push(next);
+        router.refresh();
+        return;
+      } catch (err: any) {
+        setError(err.message || "Failed to initialize Admin account.");
+        setLoadingState("idle");
+        return;
+      }
+    }
+
+    // MODE 2: STANDARD SIGN IN
     try {
       const { data, error: signInError } = await supabase.auth.signInWithPassword({
         email: email.trim(),
@@ -74,7 +177,6 @@ function LoginForm() {
         const userMeta = (data.session.user.user_metadata || {}) as Record<string, any>;
         let isApproved = appMeta.is_approved === true || userMeta.is_approved === true;
         let status = appMeta.status || userMeta.status || (isApproved ? "ACTIVE" : "PENDING_APPROVAL");
-        const role = (appMeta.role || userMeta.role || "EMPLOYEE").toUpperCase();
 
         if (status === "DEACTIVATED") {
           await supabase.auth.signOut();
@@ -91,24 +193,6 @@ function LoginForm() {
         }
 
         if (!isApproved || status === "PENDING_APPROVAL") {
-          // Safeguard: Check if this user qualifies as the first admin (zero admins exist)
-          try {
-            const promoRes = await fetch("/api/v1/auth/signup-status", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ userId: data.session.user.id }),
-            });
-            const promoData = await promoRes.json();
-            if (promoData.success && promoData.isFirstAdmin) {
-              setLoadingState("redirecting");
-              router.push(next);
-              router.refresh();
-              return;
-            }
-          } catch {
-            // Ignore and fall back to pending approval block
-          }
-
           await supabase.auth.signOut();
           setError("Your account is pending administrator approval. You will be able to log in once an administrator approves your account.");
           setLoadingState("idle");
@@ -160,8 +244,16 @@ function LoginForm() {
 
         {/* Brand Header */}
         <div className="flex flex-col items-center mb-8">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-blue-500/20 mb-3 relative group">
-            <CreditCard className="w-6 h-6 transition-transform group-hover:scale-105" />
+          <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-white shadow-lg mb-3 relative group ${
+            isZeroUsers
+              ? "bg-gradient-to-br from-emerald-500 to-teal-600 shadow-emerald-500/20"
+              : "bg-gradient-to-br from-blue-500 to-indigo-600 shadow-blue-500/20"
+          }`}>
+            {isZeroUsers ? (
+              <Sparkles className="w-6 h-6 transition-transform group-hover:scale-105" />
+            ) : (
+              <CreditCard className="w-6 h-6 transition-transform group-hover:scale-105" />
+            )}
             {isLoading && (
               <span className="absolute -top-1 -right-1 flex h-3 w-3">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
@@ -169,9 +261,17 @@ function LoginForm() {
               </span>
             )}
           </div>
-          <h1 className="text-xl font-bold tracking-tight text-white">Payment Hub</h1>
-          <p className="text-xs text-slate-400 mt-1">Sign in to manage your gateway & subscriptions</p>
+          <h1 className="text-xl font-bold tracking-tight text-white">
+            {isZeroUsers ? "Initialize Master Admin" : "Payment Hub"}
+          </h1>
+          <p className="text-xs text-slate-400 mt-1 text-center">
+            {isZeroUsers
+              ? "Welcome! Create your initial Administrator account to begin"
+              : "Sign in to manage your gateway & subscriptions"}
+          </p>
         </div>
+
+        
 
         {notice && (
           <div
@@ -199,7 +299,9 @@ function LoginForm() {
 
         <form onSubmit={handleLogin} className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1.5">Email address</label>
+            <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+              {isZeroUsers ? "Admin Email address" : "Email address"}
+            </label>
             <div className="relative">
               <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
@@ -216,13 +318,17 @@ function LoginForm() {
 
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <label className="block text-xs font-semibold text-slate-300">Password</label>
-              <Link
-                href="/forgot-password"
-                className="text-xs text-blue-400 hover:text-blue-300 transition"
-              >
-                Forgot password?
-              </Link>
+              <label className="block text-xs font-semibold text-slate-300">
+                {isZeroUsers ? "Create Admin Password" : "Password"}
+              </label>
+              {!isZeroUsers && (
+                <Link
+                  href="/forgot-password"
+                  className="text-xs text-blue-400 hover:text-blue-300 transition"
+                >
+                  Forgot password?
+                </Link>
+              )}
             </div>
             <div className="relative">
               <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -238,19 +344,41 @@ function LoginForm() {
             </div>
           </div>
 
+          {isZeroUsers && (
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                Confirm Admin Password
+              </label>
+              <div className="relative">
+                <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="password"
+                  required
+                  disabled={isLoading}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white placeholder-slate-500 text-sm focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition disabled:opacity-60 disabled:cursor-not-allowed"
+                />
+              </div>
+            </div>
+          )}
+
           <button
             type="submit"
             disabled={isLoading}
             className={`w-full py-2.5 px-4 rounded-xl font-semibold text-sm transition shadow-lg flex items-center justify-center gap-2 cursor-pointer mt-2 ${
               loadingState === "redirecting"
                 ? "bg-emerald-600 text-white shadow-emerald-600/20"
+                : isZeroUsers
+                ? "bg-emerald-600 hover:bg-emerald-500 disabled:opacity-70 text-white shadow-emerald-600/20"
                 : "bg-blue-600 hover:bg-blue-500 disabled:opacity-70 text-white shadow-blue-600/20"
             }`}
           >
             {loadingState === "authenticating" && (
               <>
                 <Loader2 className="w-4 h-4 animate-spin text-blue-200" />
-                <span>Authenticating credentials...</span>
+                <span>{isZeroUsers ? "Initializing Master Admin..." : "Authenticating credentials..."}</span>
               </>
             )}
             {loadingState === "authorizing" && (
@@ -267,7 +395,7 @@ function LoginForm() {
             )}
             {loadingState === "idle" && (
               <>
-                <span>Sign In</span>
+                <span>{isZeroUsers ? "Create Admin & Launch Hub" : "Sign In"}</span>
                 <ArrowRight className="w-4 h-4" />
               </>
             )}
@@ -275,8 +403,14 @@ function LoginForm() {
         </form>
 
         <div className="mt-6 pt-6 border-t border-slate-800 text-center text-xs text-slate-400">
-          Registration is invite-only. Received an invitation?{" "}
-          <span className="text-blue-400 font-semibold">Open your invite link</span>
+          {isZeroUsers ? (
+            <span>Initial setup mode is active. This will automatically lock after your account is created.</span>
+          ) : (
+            <>
+              Registration is invite-only. Received an invitation?{" "}
+              <span className="text-blue-400 font-semibold">Open your invite link</span>
+            </>
+          )}
         </div>
       </div>
     </div>

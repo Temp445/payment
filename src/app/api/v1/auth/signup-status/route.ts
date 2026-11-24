@@ -5,13 +5,6 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const config = await prisma.paymentHubConfig.findUnique({
-      where: { key: "allow_public_signup" },
-    });
-
-    // Default to false (Invite Only) unless explicitly enabled
-    let allowPublicSignup = config ? config.value === "true" : false;
-
     // Check total registered users in Supabase auth.users table
     let userCount = 0;
     try {
@@ -25,23 +18,15 @@ export async function GET() {
 
     const isFirstUser = userCount === 0;
 
-    // If there are zero users initially, signup must never be locked so the initial admin can register
-    if (isFirstUser) {
-      allowPublicSignup = true;
-    }
-
     return NextResponse.json({
       success: true,
-      allowPublicSignup,
       isFirstUser,
       userCount,
     });
   } catch (err: any) {
-    console.error("Failed to fetch signup lock status:", err);
-    // Fail safe to true
+    console.error("Failed to fetch signup status:", err);
     return NextResponse.json({
       success: true,
-      allowPublicSignup: true,
       isFirstUser: false,
       userCount: 1,
     });
@@ -60,7 +45,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // UUID format check to ensure security and prevent SQL injection
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(userId)) {
       return NextResponse.json(
@@ -69,7 +53,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 1. Count total registered users in auth.users
+    // 1. Check total registered users in auth.users
     const userCountResult = await prisma.$queryRawUnsafe<[{ count: number | bigint }]>(`
       SELECT count(*)::int as count FROM auth.users;
     `);
@@ -82,30 +66,21 @@ export async function POST(req: NextRequest) {
     `);
     const adminCount = Number(adminCountResult[0]?.count || 0);
 
-    // 3. Confirm target user exists
-    const targetUsers = await prisma.$queryRawUnsafe<any[]>(`
-      SELECT id, email FROM auth.users WHERE id = '${userId}'::uuid;
-    `);
-    if (!targetUsers || targetUsers.length === 0) {
-      return NextResponse.json(
-        { success: false, error: "User record not found." },
-        { status: 404 }
-      );
-    }
-
-    // 4. Verify first-user qualification
-    // Only promote if this is the only registered user (count <= 1) OR no admin exists in the entire system
+    // Qualifies as first admin if 1 or fewer users exist, or no admin exists in the system
     const qualifiesAsFirstAdmin = count <= 1 || adminCount === 0;
 
     if (!qualifiesAsFirstAdmin) {
-      return NextResponse.json({
-        success: true,
-        isFirstAdmin: false,
-        message: "Existing administrator exists. Account requires administrator approval.",
-      });
+      return NextResponse.json(
+        {
+          success: false,
+          isFirstAdmin: false,
+          error: "An administrator already exists. Registration is strictly by invitation only.",
+        },
+        { status: 403 }
+      );
     }
 
-    // 5. Promote target user to ACTIVE approved ADMIN
+    // Direct database update via Prisma: elevate user to confirmed ACTIVE Master ADMIN
     const payload = JSON.stringify({
       role: "ADMIN",
       status: "ACTIVE",
@@ -114,7 +89,8 @@ export async function POST(req: NextRequest) {
 
     await prisma.$executeRawUnsafe(`
       UPDATE auth.users 
-      SET raw_app_meta_data = COALESCE(raw_app_meta_data, '{}'::jsonb) || '${payload}'::jsonb,
+      SET email_confirmed_at = COALESCE(email_confirmed_at, now()),
+          raw_app_meta_data = COALESCE(raw_app_meta_data, '{}'::jsonb) || '${payload}'::jsonb,
           raw_user_meta_data = COALESCE(raw_user_meta_data, '{}'::jsonb) || '${payload}'::jsonb
       WHERE id = '${userId}'::uuid;
     `);
@@ -122,10 +98,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       isFirstAdmin: true,
-      message: "First user successfully registered and designated as System Administrator.",
+      message: "First user successfully registered and designated as Master System Administrator.",
     });
   } catch (err: any) {
-    console.error("Failed to process first user promotion:", err);
+    console.error("Failed to process administrator promotion:", err);
     return NextResponse.json(
       { success: false, error: err.message || "Failed to configure administrator status." },
       { status: 500 }
