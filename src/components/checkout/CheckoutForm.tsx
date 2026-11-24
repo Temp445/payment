@@ -80,16 +80,14 @@ export default function CheckoutForm({
     return data as CheckoutInfo & { success: boolean };
   }, [session, hubBase]);
 
-  // Load order info + SDK
+  // Load order info + SDK in parallel for ultra-fast popup mounting (< 1-2s)
   useEffect(() => {
     (async () => {
       try {
-        const data = await fetchInfo();
+        const [data] = await Promise.all([fetchInfo(), loadSdk()]);
         setInfo(data);
         if (data.order.status === "PAID") setResult("PAID");
-        await loadSdk();
         cf.current = window.Cashfree!({ mode: data.mode });
-        // trigger mount effect
         setInfo({ ...data });
       } catch (e: any) {
         setError(e.message);

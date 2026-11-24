@@ -15,6 +15,17 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
+        {/* Cashfree Fast Preconnect & DNS Prefetch for ultra-fast popup load (<1-2s) */}
+        <link rel="preconnect" href="https://sdk.cashfree.com" crossOrigin="anonymous" />
+        <link rel="preconnect" href="https://payments.cashfree.com" crossOrigin="anonymous" />
+        <link rel="preconnect" href="https://api.cashfree.com" crossOrigin="anonymous" />
+        <link rel="preconnect" href="https://sandbox.cashfree.com" crossOrigin="anonymous" />
+        <link rel="dns-prefetch" href="https://sdk.cashfree.com" />
+        <link rel="dns-prefetch" href="https://payments.cashfree.com" />
+        <link rel="dns-prefetch" href="https://api.cashfree.com" />
+        <link rel="dns-prefetch" href="https://sandbox.cashfree.com" />
+        <link rel="preload" href="https://sdk.cashfree.com/js/v3/cashfree.js" as="script" />
+
         <script
           dangerouslySetInnerHTML={{
             __html: `

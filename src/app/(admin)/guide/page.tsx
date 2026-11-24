@@ -792,6 +792,7 @@ const NAV_CATEGORIES: NavCategory[] = [
     icon: Cpu,
     items: [
       { id: "sandbox-testing", title: "Cashfree Sandbox & Cards" },
+      { id: "performance-optimization", title: "⚡ 1-2s Popup Optimization", badge: "Speed" },
     ],
   },
   {
@@ -861,12 +862,12 @@ export default function GuidePage() {
             <span className="hidden xs:inline">Docs</span>
           </button>
           <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-blue-600 flex items-center justify-center font-black text-white text-sm sm:text-base shadow-md shadow-blue-900/40">
+            {/* <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-blue-600 flex items-center justify-center font-black text-white text-sm sm:text-base shadow-md shadow-blue-900/40">
               P
-            </div>
+            </div> */}
             <div>
               <div className="flex items-center gap-1.5 sm:gap-2">
-                <span className="font-bold text-xs sm:text-sm tracking-tight text-white">Payment Hub</span>
+                {/* <span className="font-bold text-xs sm:text-sm tracking-tight text-white">Payment Hub</span> */}
                 <span className="hidden sm:inline-block text-[10px] px-1.5 py-0.2 rounded bg-blue-500/10 text-blue-400 font-semibold border border-blue-500/20">
                   Developer Docs
                 </span>
@@ -892,7 +893,7 @@ export default function GuidePage() {
         {/* Right Actions */}
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
           <span className="hidden lg:inline-flex text-[11px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-            Cashfree v2023 • Live Ready
+            Cashfree v2023
           </span>
           <Link
             href="/apps"
@@ -2304,6 +2305,112 @@ x-client-id: pub_live_payroll_d42a8b9e...
                   <p className="font-mono text-sm font-bold text-white">success@upi</p>
                   <p className="text-[11px] text-slate-400">Instant UPI Approval</p>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* =============================================================== */}
+          {/* 13B. CASHFREE 1-2S POPUP SPEED OPTIMIZATION */}
+          {/* =============================================================== */}
+          {activeSection === "performance-optimization" && (
+            <div className="space-y-6 animate-in fade-in duration-200">
+              <div className="space-y-2 border-b border-slate-800 pb-4">
+                <div className="flex items-center gap-2 text-xs text-amber-400 font-semibold uppercase tracking-wider">
+                  <span>Performance</span>
+                  <ChevronRight className="w-3 h-3 text-slate-600" />
+                  <span>Popup Speed Optimization</span>
+                </div>
+                <h2 className="text-2xl font-extrabold text-white">How to Reduce Cashfree Popup Load Time to ~1–2 Seconds</h2>
+                <p className="text-xs text-slate-400">
+                  Pre-resolve DNS lookups, pre-warm TLS handshakes, and preload Cashfree SDK assets on app startup so clicking the pay button renders the Cashfree checkout modal instantly.
+                </p>
+              </div>
+
+              {/* Step 1: Preconnect & Prefetch */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-lg bg-amber-500/20 text-amber-400 font-bold text-xs flex items-center justify-center">
+                    1
+                  </div>
+                  <h3 className="font-bold text-sm text-slate-100">
+                    Add DNS Preconnect & Prefetch in your Client App&apos;s index.html / head
+                  </h3>
+                </div>
+                <p className="text-xs text-slate-400">
+                  Add this block inside the <code className="text-blue-300">&lt;head&gt;</code> tag of your application (e.g. <code className="text-slate-300">index.html</code> in Vite or <code className="text-slate-300">app/layout.tsx</code> in Next.js). This eliminates ~2–3 seconds of TLS connection latency before the user even clicks pay:
+                </p>
+                <CodeBlock
+                  title="HTML Head Preconnect & Prefetch Snippet"
+                  language="html"
+                  code={`<!-- Cashfree Fast Preconnect & DNS Prefetch (<1-2s popup response) -->
+<link rel="preconnect" href="https://sdk.cashfree.com" crossorigin />
+<link rel="preconnect" href="https://payments.cashfree.com" crossorigin />
+<link rel="preconnect" href="https://api.cashfree.com" crossorigin />
+<link rel="preconnect" href="https://sandbox.cashfree.com" crossorigin />
+
+<link rel="dns-prefetch" href="https://sdk.cashfree.com" />
+<link rel="dns-prefetch" href="https://payments.cashfree.com" />
+<link rel="dns-prefetch" href="https://api.cashfree.com" />
+<link rel="dns-prefetch" href="https://sandbox.cashfree.com" />
+
+<!-- Preload Cashfree JS SDK in browser memory -->
+<link rel="preload" href="https://sdk.cashfree.com/js/v3/cashfree.js" as="script" />`}
+                />
+              </div>
+
+              {/* Step 2: Pre-initialize SDK */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-lg bg-amber-500/20 text-amber-400 font-bold text-xs flex items-center justify-center">
+                    2
+                  </div>
+                  <h3 className="font-bold text-sm text-slate-100">
+                    Pre-initialize the SDK on Page Mount (Zero Delay on Button Click)
+                  </h3>
+                </div>
+                <p className="text-xs text-slate-400">
+                  Instead of awaiting SDK script downloads inside the button click handler, initialize the Cashfree SDK instance on page mount so it is warm in memory:
+                </p>
+                <CodeBlock
+                  title="Instant Popup Execution (usePaymentHub.ts / CheckoutButton.tsx)"
+                  language="typescript"
+                  code={`import { load } from "@cashfreepayments/cashfree-js";
+
+// 1. Pre-warm Cashfree instance on component mount
+useEffect(() => {
+  load({ mode: "production" }); // or "sandbox"
+}, []);
+
+// 2. When user clicks "Pay Now":
+async function handlePayClick() {
+  // A. Create order session through Central Payment Hub
+  const order = await paymentHubClient.checkout({ amount: 1500, customerPhone: "9876543210" });
+  
+  // B. Instantly launch modal in under 1 second!
+  const cashfree = await load({ mode: order.mode || "production" });
+  await cashfree.checkout({
+    paymentSessionId: order.payment_session_id,
+    redirectTarget: "_modal",
+  });
+}`}
+                />
+              </div>
+
+              {/* AI Prompt Snippet */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-lg bg-emerald-500/20 text-emerald-400 font-bold text-xs flex items-center justify-center">
+                    3
+                  </div>
+                  <h3 className="font-bold text-sm text-slate-100">
+                    AI Assistant Prompt (Copy & Paste to your AI Agent or Cursor)
+                  </h3>
+                </div>
+                <CodeBlock
+                  title="Prompt for Ultra-Fast Cashfree Popup"
+                  language="text"
+                  code={`Optimize Cashfree checkout popup load time to under 1–2 seconds by adding DNS prefetch and preconnect tags for https://sdk.cashfree.com, https://payments.cashfree.com, and https://api.cashfree.com in index.html. Pre-load the Cashfree v3 JS SDK with defer/preload, and pre-initialize const cashfree = await load({ mode }) on page mount so that clicking the Pay button immediately opens the modal without waiting for script downloads or DNS handshakes.`}
+                />
               </div>
             </div>
           )}
