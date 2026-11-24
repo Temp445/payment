@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
   AreaChart,
   Area,
@@ -15,6 +15,20 @@ interface VolumeChartProps {
 }
 
 export function VolumeChart({ data }: VolumeChartProps) {
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  if (!isMounted) {
+    return (
+      <div className="h-64 w-full flex items-center justify-center">
+        <div className="w-6 h-6 rounded-full border-2 border-blue-500/30 border-t-blue-500 animate-spin" />
+      </div>
+    );
+  }
+
   if (!data || data.length === 0) {
     return (
       <div className="h-64 flex items-center justify-center text-xs text-[var(--muted-foreground)]">
@@ -24,8 +38,8 @@ export function VolumeChart({ data }: VolumeChartProps) {
   }
 
   return (
-    <div className="h-64 w-full">
-      <ResponsiveContainer width="100%" height="100%">
+    <div className="h-64 w-full min-h-[250px]">
+      <ResponsiveContainer width="100%" height={250} minWidth={0}>
         <AreaChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
           <defs>
             <linearGradient id="volumeGrad" x1="0" y1="0" x2="0" y2="1">
@@ -46,7 +60,7 @@ export function VolumeChart({ data }: VolumeChartProps) {
             tickLine={false}
             axisLine={false}
             domain={[0, "auto"]}
-            tickFormatter={(val) => `₹${val >= 1000 ? `${val / 1000}k` : val}`}
+            tickFormatter={(val) => `₹${val >= 1000 ? `${(val / 1000).toFixed(0)}k` : val}`}
           />
           <Tooltip
             contentStyle={{

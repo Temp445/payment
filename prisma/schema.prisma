@@ -191,5 +191,22 @@ model PaymentHubConfig {
   @@map("payment_hub_config")
 }
 
+model UserInvite {
+  id            String    @id @default(uuid())
+  email         String
+  role          String    @default("EMPLOYEE")
+  allowedAppIds String[]  @default([])
+  token         String    @unique
+  expiresAt     DateTime
+  usedAt        DateTime?
+  invitedBy     String?
+  createdAt     DateTime  @default(now())
+
+  @@index([token])
+  @@index([email])
+  @@map("user_invites")
+}
+
+
 
 

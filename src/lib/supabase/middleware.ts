@@ -21,12 +21,19 @@ export async function updateSession(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname;
 
+  // 1. FAST PATH: All API routes handle their own authentication and return JSON.
+  // NEVER redirect API routes to HTML login pages.
+  if (pathname.startsWith("/api")) {
+    return response;
+  }
+
   // Public paths that do not require authentication
   const isAuthPage =
     pathname.startsWith("/login") ||
     pathname.startsWith("/signup") ||
     pathname.startsWith("/forgot-password") ||
     pathname.startsWith("/reset-password") ||
+    pathname.startsWith("/invite") ||
     pathname.startsWith("/auth");
 
   const isPublicPage =
@@ -125,7 +132,7 @@ export async function updateSession(request: NextRequest) {
     }
 
     // 4. Authenticated & approved user visiting login/signup pages redirected to dashboard
-    if (isAuthPage && !pathname.startsWith("/reset-password")) {
+    if (isAuthPage && !pathname.startsWith("/reset-password") && !pathname.startsWith("/invite")) {
       const redirectUrl = request.nextUrl.clone();
       redirectUrl.pathname = "/";
       redirectUrl.searchParams.delete("next");

@@ -66,7 +66,21 @@ export default function UsersSettingsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"ALL" | "ACTIVE" | "DEACTIVATED" | "PENDING_APPROVAL" | "REJECTED">("ALL");
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  
+  // Invite User state
   const [showInviteModal, setShowInviteModal] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState<"ADMIN" | "EMPLOYEE">("EMPLOYEE");
+  const [inviteAllowedAppIds, setInviteAllowedAppIds] = useState<string[]>([]);
+  const [inviting, setInviting] = useState(false);
+  const [inviteResult, setInviteResult] = useState<{
+    inviteUrl: string;
+    email: string;
+    role: string;
+    emailSent?: boolean;
+    emailStatusMessage?: string;
+  } | null>(null);
+  const [copiedInviteUrl, setCopiedInviteUrl] = useState(false);
 
   // Modal for assigning apps to an employee
   const [assignModalUser, setAssignModalUser] = useState<UserItem | null>(null);
@@ -111,6 +125,61 @@ export default function UsersSettingsPage() {
     navigator.clipboard.writeText(id);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
+  }
+
+  async function handleSendInvite(e: React.FormEvent) {
+    e.preventDefault();
+    if (!inviteEmail.trim()) return;
+    setInviting(true);
+    setStatusMsg(null);
+    try {
+      const res = await fetch("/api/v1/users/invite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: inviteEmail.trim(),
+          role: inviteRole,
+          allowedAppIds: inviteRole === "EMPLOYEE" ? inviteAllowedAppIds : [],
+        }),
+      });
+      const data = await res.json();
+      if (data.success && data.invite) {
+        setInviteResult({
+          inviteUrl: data.invite.inviteUrl,
+          email: data.invite.email,
+          role: data.invite.role,
+          emailSent: Boolean(data.emailSent),
+          emailStatusMessage: data.emailStatusMessage,
+        });
+        setStatusMsg({
+          type: "success",
+          text: data.emailSent
+            ? `Invitation email successfully dispatched directly to ${data.invite.email}!`
+            : data.emailStatusMessage || `Invitation link generated for ${data.invite.email}`,
+        });
+      } else {
+        setStatusMsg({ type: "error", text: data.error || "Failed to create invitation" });
+      }
+    } catch (err: any) {
+      setStatusMsg({ type: "error", text: err.message || "Failed to send invitation" });
+    } finally {
+      setInviting(false);
+    }
+  }
+
+  function handleCloseInviteModal() {
+    setShowInviteModal(false);
+    setInviteEmail("");
+    setInviteRole("EMPLOYEE");
+    setInviteAllowedAppIds([]);
+    setInviteResult(null);
+    setCopiedInviteUrl(false);
+  }
+
+  function handleToggleInviteApp(appId: string) {
+    setInviteAllowedAppIds((prev) =>
+      prev.includes(appId) ? prev.filter((id) => id !== appId) : [...prev, appId]
+    );
   }
 
   function handleOpenAssignApps(user: UserItem) {
@@ -381,11 +450,18 @@ export default function UsersSettingsPage() {
         {/* Navigation Tabs under Settings */}
         <div className="flex items-center gap-2 border-b border-[var(--border)] pb-3 overflow-x-auto no-scrollbar">
           <Link
-            href="/settings"
+            href="/settings?tab=gateway"
             className="flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-medium text-[var(--muted-foreground)] hover:text-white hover:bg-slate-800/60 transition shrink-0 whitespace-nowrap"
           >
             <Settings className="w-4 h-4" />
             <span>Gateway & System Settings</span>
+          </Link>
+          <Link
+            href="/settings?tab=email"
+            className="flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-medium text-[var(--muted-foreground)] hover:text-white hover:bg-slate-800/60 transition shrink-0 whitespace-nowrap"
+          >
+            <Mail className="w-4 h-4" />
+            <span>Email Gateway (SMTP)</span>
           </Link>
           <Link
             href="/settings/users"
@@ -572,13 +648,16 @@ export default function UsersSettingsPage() {
                 <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin text-blue-400" : ""}`} />
               </button>
 
-              {/* <button
-                onClick={() => setShowInviteModal(true)}
+              <button
+                onClick={() => {
+                  setInviteResult(null);
+                  setShowInviteModal(true);
+                }}
                 className="flex-1 sm:flex-none px-3.5 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs flex items-center justify-center gap-1.5 transition shadow shrink-0"
               >
                 <UserPlus className="w-3.5 h-3.5" />
-                <span>Invite User</span>
-              </button> */}
+                <span>Invite Team Member</span>
+              </button>
             </div>
           </div>
 
@@ -1208,78 +1287,232 @@ export default function UsersSettingsPage() {
         {/* Invite / Add User Modal */}
         {showInviteModal && (
           <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="w-full max-w-md max-h-[90vh] overflow-y-auto bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-5 sm:p-6 space-y-4">
+            <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-5 sm:p-6 space-y-4">
               <div className="flex items-center justify-between pb-3 border-b border-slate-800">
                 <div className="flex items-center gap-2">
                   <UserPlus className="w-5 h-5 text-blue-400" />
-                  <h3 className="font-bold text-sm text-white">Invite / Add Team Member</h3>
+                  <h3 className="font-bold text-sm text-white">Invite Team Member</h3>
                 </div>
                 <button
-                  onClick={() => setShowInviteModal(false)}
+                  onClick={handleCloseInviteModal}
                   className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition"
                 >
                   ✕
                 </button>
               </div>
 
-              <div className="space-y-3 text-xs text-slate-300 leading-relaxed">
-                <p>
-                  To onboard a new employee or administrator:
-                </p>
-                <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
-                  <div className="font-semibold text-white flex items-center gap-1.5">
-                    <Mail className="w-4 h-4 text-blue-400" />
-                    <span>Registration Link</span>
+              {inviteResult ? (
+                <div className="space-y-4">
+                  {inviteResult.emailSent ? (
+                    <div className="p-4 rounded-xl bg-emerald-950/40 border border-emerald-500/30 text-emerald-300 text-xs flex items-start gap-3">
+                      <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-semibold text-white">Invitation Email Dispatched!</p>
+                        <p className="text-[11px] text-emerald-400/90 mt-0.5 leading-relaxed">
+                          An invitation email has been sent directly to <strong className="text-white">{inviteResult.email}</strong>. They can click the link in their inbox to activate their account as <strong>{inviteResult.role}</strong>.
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-4 rounded-xl bg-amber-950/30 border border-amber-500/30 text-amber-300 text-xs flex items-start gap-3">
+                      <Mail className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-semibold text-white">Invitation Link Created</p>
+                        <p className="text-[11px] text-amber-400/90 mt-0.5 leading-relaxed">
+                          {inviteResult.emailStatusMessage || `Share this link with ${inviteResult.email} to register as ${inviteResult.role}.`}
+                        </p>
+                        <Link
+                          href="/settings"
+                          className="inline-block mt-2 text-[10px] text-blue-400 hover:underline font-medium"
+                        >
+                          Configure SMTP in Settings to send directly to inboxes →
+                        </Link>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-semibold text-slate-300">Shareable Invite Link (Backup):</label>
+                    <div className="flex items-center gap-2 p-2 rounded-xl bg-slate-950 border border-slate-800">
+                      <input
+                        type="text"
+                        readOnly
+                        value={inviteResult.inviteUrl}
+                        className="bg-transparent text-xs text-blue-300 font-mono flex-1 outline-none select-all"
+                      />
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(inviteResult.inviteUrl);
+                          setCopiedInviteUrl(true);
+                          setTimeout(() => setCopiedInviteUrl(false), 2000);
+                        }}
+                        className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-medium text-xs flex items-center gap-1.5 transition shrink-0"
+                      >
+                        {copiedInviteUrl ? <Check className="w-3.5 h-3.5 text-emerald-300" /> : <Copy className="w-3.5 h-3.5" />}
+                        <span>{copiedInviteUrl ? "Copied!" : "Copy Link"}</span>
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-slate-500 italic">This invitation link will expire in 7 days.</p>
                   </div>
-                  <p className="text-slate-400 text-[11px]">
-                    {allowPublicSignup
-                      ? "Share the sign-up link. When they register, they will appear in your 'Pending Approval' queue."
-                      : "Sign-up is currently locked. You must unlock the sign-up screen above before they can register."}
-                  </p>
-                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                    <code className="text-blue-300 bg-blue-950/50 px-2 py-1.5 rounded text-[11px] select-all flex-1 truncate">
-                      {typeof window !== "undefined" ? `${window.location.origin}/signup` : "/signup"}
-                    </code>
+
+                  <div className="pt-2 flex justify-end">
                     <button
-                      onClick={() => {
-                        const url = `${window.location.origin}/signup`;
-                        navigator.clipboard.writeText(url);
-                        alert("Signup URL copied to clipboard!");
-                      }}
-                      className="px-3 py-1.5 rounded bg-blue-600 hover:bg-blue-500 text-white font-medium text-[11px] shrink-0"
+                      onClick={handleCloseInviteModal}
+                      className="w-full sm:w-auto px-5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-medium text-xs transition"
                     >
-                      Copy
+                      Done
                     </button>
                   </div>
                 </div>
-
-                <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-1.5">
-                  <div className="font-semibold text-white flex items-center gap-1.5">
-                    <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                    <span>Direct Admin Invite in Supabase</span>
+              ) : (
+                <form onSubmit={handleSendInvite} className="space-y-4 text-xs">
+                  <div>
+                    <label className="block text-slate-300 font-medium mb-1">
+                      Invitee Email Address <span className="text-rose-400">*</span>
+                    </label>
+                    <div className="relative">
+                      <Mail className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
+                      <input
+                        type="email"
+                        required
+                        placeholder="colleague@yourcompany.com"
+                        value={inviteEmail}
+                        onChange={(e) => setInviteEmail(e.target.value)}
+                        className="w-full pl-9 pr-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-white focus:outline-none focus:border-blue-500"
+                      />
+                    </div>
                   </div>
-                  <p className="text-slate-400 text-[11px]">
-                    You can also send direct email invitation links via the Supabase Auth Console.
-                  </p>
-                  <a
-                    href="https://supabase.com/dashboard/project/etixgqrvyrmoxcdpmjxb/auth/users"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1 text-blue-400 hover:text-blue-300 font-semibold text-[11px] pt-1"
-                  >
-                    Open Supabase Auth Console <ExternalLink className="w-3 h-3" />
-                  </a>
-                </div>
-              </div>
 
-              <div className="pt-2 flex justify-end">
-                <button
-                  onClick={() => setShowInviteModal(false)}
-                  className="w-full sm:w-auto px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-medium text-xs transition"
-                >
-                  Close
-                </button>
-              </div>
+                  <div>
+                    <label className="block text-slate-300 font-medium mb-1.5">Assigned Role</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setInviteRole("EMPLOYEE")}
+                        className={`p-3 rounded-xl border text-left transition ${
+                          inviteRole === "EMPLOYEE"
+                            ? "bg-blue-600/15 border-blue-500 text-white"
+                            : "bg-slate-950 border-slate-800 text-slate-400 hover:text-white"
+                        }`}
+                      >
+                        <div className="font-semibold text-xs flex items-center gap-1.5">
+                          <Users className="w-3.5 h-3.5 text-blue-400" />
+                          <span>Employee</span>
+                        </div>
+                        <p className="text-[10px] text-slate-400 mt-1 leading-snug">
+                          Restricted access to authorized applications only.
+                        </p>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setInviteRole("ADMIN")}
+                        className={`p-3 rounded-xl border text-left transition ${
+                          inviteRole === "ADMIN"
+                            ? "bg-purple-600/15 border-purple-500 text-white"
+                            : "bg-slate-950 border-slate-800 text-slate-400 hover:text-white"
+                        }`}
+                      >
+                        <div className="font-semibold text-xs flex items-center gap-1.5">
+                          <ShieldCheck className="w-3.5 h-3.5 text-purple-400" />
+                          <span>Administrator</span>
+                        </div>
+                        <p className="text-[10px] text-slate-400 mt-1 leading-snug">
+                          Full hub access, credentials management & user controls.
+                        </p>
+                      </button>
+                    </div>
+                  </div>
+
+                  {inviteRole === "EMPLOYEE" && (
+                    <div className="space-y-2 pt-1 border-t border-slate-800">
+                      <div className="flex items-center justify-between">
+                        <label className="text-slate-300 font-medium text-[11px]">
+                          Authorized Applications ({inviteAllowedAppIds.length} of {availableApps.length})
+                        </label>
+                        <div className="flex items-center gap-2 text-[10px]">
+                          <button
+                            type="button"
+                            onClick={() => setInviteAllowedAppIds(availableApps.map((a) => a.id))}
+                            className="text-blue-400 hover:underline"
+                          >
+                            Select All
+                          </button>
+                          <span className="text-slate-600">|</span>
+                          <button
+                            type="button"
+                            onClick={() => setInviteAllowedAppIds([])}
+                            className="text-slate-400 hover:underline"
+                          >
+                            Clear
+                          </button>
+                        </div>
+                      </div>
+
+                      {availableApps.length === 0 ? (
+                        <p className="text-slate-500 text-[11px] italic">No active applications registered yet.</p>
+                      ) : (
+                        <div className="max-h-40 overflow-y-auto space-y-1.5 pr-1">
+                          {availableApps.map((app) => {
+                            const isSelected = inviteAllowedAppIds.includes(app.id);
+                            return (
+                              <button
+                                key={app.id}
+                                type="button"
+                                onClick={() => handleToggleInviteApp(app.id)}
+                                className={`w-full flex items-center justify-between p-2 rounded-lg border text-left transition ${
+                                  isSelected
+                                    ? "bg-blue-950/40 border-blue-500/40 text-white"
+                                    : "bg-slate-950 border-slate-800/80 text-slate-400 hover:text-slate-200"
+                                }`}
+                              >
+                                <div>
+                                  <span className="font-mono text-[11px] font-semibold text-blue-300 mr-2">
+                                    {app.appCode}
+                                  </span>
+                                  <span className="text-[11px]">{app.appName}</span>
+                                </div>
+                                {isSelected ? (
+                                  <CheckSquare className="w-4 h-4 text-blue-400 shrink-0" />
+                                ) : (
+                                  <Square className="w-4 h-4 text-slate-600 shrink-0" />
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="pt-3 flex justify-end gap-2 border-t border-slate-800">
+                    <button
+                      type="button"
+                      onClick={handleCloseInviteModal}
+                      className="px-3.5 py-2 rounded-lg border border-slate-800 text-slate-400 hover:text-white transition"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={inviting || !inviteEmail.trim()}
+                      className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold transition flex items-center gap-1.5 disabled:opacity-50"
+                    >
+                      {inviting ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          <span>Generating...</span>
+                        </>
+                      ) : (
+                        <>
+                          <UserPlus className="w-3.5 h-3.5" />
+                          <span>Create Invitation Link</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              )}
             </div>
           </div>
         )}

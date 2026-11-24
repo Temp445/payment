@@ -7,7 +7,18 @@ interface HubConfigCache {
   cashfreeEnv: string;
   cashfreeAppId: string;
   cashfreeSecretKey: string;
+  cashfreeTestAppId: string;
+  cashfreeTestSecretKey: string;
+  cashfreeProdAppId: string;
+  cashfreeProdSecretKey: string;
   cashfreeApiVersion: string;
+  smtpHost: string;
+  smtpPort: number;
+  smtpUsername: string;
+  smtpPassword: string;
+  smtpUseTls: boolean;
+  defaultFromEmail: string;
+  defaultFromName: string;
   lastFetched: number;
 }
 
@@ -19,7 +30,18 @@ let cachedConfig: HubConfigCache = {
   cashfreeEnv: "TEST",
   cashfreeAppId: "",
   cashfreeSecretKey: "",
+  cashfreeTestAppId: "",
+  cashfreeTestSecretKey: "",
+  cashfreeProdAppId: "",
+  cashfreeProdSecretKey: "",
   cashfreeApiVersion: "2023-08-01",
+  smtpHost: "",
+  smtpPort: 465,
+  smtpUsername: "",
+  smtpPassword: "",
+  smtpUseTls: true,
+  defaultFromEmail: "",
+  defaultFromName: "Ace Payment Hub",
   lastFetched: 0,
 };
 
@@ -73,9 +95,26 @@ export async function initHubConfig(): Promise<void> {
     const hubUrl = cleanMultiUrls(configMap["hub_url"] || "");
     const adminApiKey = (configMap["admin_api_key"] || "").trim();
     const cashfreeEnv = (configMap["cashfree_env"] || "TEST").trim().toUpperCase();
-    const cashfreeAppId = (configMap["cashfree_app_id"] || "").trim();
-    const cashfreeSecretKey = (configMap["cashfree_secret_key"] || "").trim();
+
+    // Dual Test & Production credentials with backward-compatible fallback to legacy keys
+    const cashfreeTestAppId = (configMap["cashfree_test_app_id"] || configMap["cashfree_app_id"] || "").trim();
+    const cashfreeTestSecretKey = (configMap["cashfree_test_secret_key"] || configMap["cashfree_secret_key"] || "").trim();
+    const cashfreeProdAppId = (configMap["cashfree_prod_app_id"] || (cashfreeEnv === "PRODUCTION" ? configMap["cashfree_app_id"] : "") || "").trim();
+    const cashfreeProdSecretKey = (configMap["cashfree_prod_secret_key"] || (cashfreeEnv === "PRODUCTION" ? configMap["cashfree_secret_key"] : "") || "").trim();
+
+    // Active credentials derived from active environment
+    const cashfreeAppId = cashfreeEnv === "PRODUCTION" ? (cashfreeProdAppId || cashfreeTestAppId) : (cashfreeTestAppId || cashfreeProdAppId);
+    const cashfreeSecretKey = cashfreeEnv === "PRODUCTION" ? (cashfreeProdSecretKey || cashfreeTestSecretKey) : (cashfreeTestSecretKey || cashfreeProdSecretKey);
     const cashfreeApiVersion = (configMap["cashfree_api_version"] || "2023-08-01").trim();
+
+    // Outbound SMTP email settings
+    const smtpHost = (configMap["smtp_host"] || process.env.SMTP_HOST || "").trim();
+    const smtpPort = Number(configMap["smtp_port"] || process.env.SMTP_PORT || 465);
+    const smtpUsername = (configMap["smtp_username"] || process.env.SMTP_USER || "").trim();
+    const smtpPassword = (configMap["smtp_password"] || process.env.SMTP_PASSWORD || "").trim();
+    const smtpUseTls = configMap["smtp_use_tls"] !== "false";
+    const defaultFromEmail = (configMap["default_from_email"] || process.env.SMTP_FROM_EMAIL || smtpUsername).trim();
+    const defaultFromName = (configMap["default_from_name"] || "Ace Payment Hub").trim();
 
     cachedConfig = {
       hubUrl,
@@ -83,12 +122,23 @@ export async function initHubConfig(): Promise<void> {
       cashfreeEnv,
       cashfreeAppId,
       cashfreeSecretKey,
+      cashfreeTestAppId,
+      cashfreeTestSecretKey,
+      cashfreeProdAppId,
+      cashfreeProdSecretKey,
       cashfreeApiVersion,
+      smtpHost,
+      smtpPort,
+      smtpUsername,
+      smtpPassword,
+      smtpUseTls,
+      defaultFromEmail,
+      defaultFromName,
       lastFetched: Date.now(),
     };
 
     logger.info(
-      `Loaded payment_hub_config from database: hub_url=${cachedConfig.hubUrl}, cashfree_env=${cashfreeEnv}, cashfree_app_id=${cashfreeAppId ? "configured" : "none"}`
+      `Loaded payment_hub_config from database: hub_url=${cachedConfig.hubUrl}, cashfree_env=${cashfreeEnv}, test_configured=${Boolean(cashfreeTestAppId)}, prod_configured=${Boolean(cashfreeProdAppId)}`
     );
   } catch (err: any) {
     logger.warn(`Failed to init payment_hub_config from database: ${err.message}`);
@@ -96,7 +146,7 @@ export async function initHubConfig(): Promise<void> {
 }
 
 /**
- * Save Hub URL, Admin API Key, and Cashfree Gateway Credentials to database.
+ * Save Hub URL, Admin API Key, Cashfree Credentials, and SMTP Email Settings to database.
  */
 export async function saveHubConfig(params: {
   hubUrl?: string;
@@ -104,23 +154,36 @@ export async function saveHubConfig(params: {
   cashfreeEnv?: string;
   cashfreeAppId?: string;
   cashfreeSecretKey?: string;
+  cashfreeTestAppId?: string;
+  cashfreeTestSecretKey?: string;
+  cashfreeProdAppId?: string;
+  cashfreeProdSecretKey?: string;
   cashfreeApiVersion?: string;
-}): Promise<{
-  hubUrl: string;
-  adminApiKey: string;
-  cashfreeEnv: string;
-  cashfreeAppId: string;
-  cashfreeSecretKey: string;
-  cashfreeApiVersion: string;
-}> {
+  smtpHost?: string;
+  smtpPort?: number;
+  smtpUsername?: string;
+  smtpPassword?: string;
+  smtpUseTls?: boolean;
+  defaultFromEmail?: string;
+  defaultFromName?: string;
+}): Promise<HubConfigCache> {
   const updates: Promise<any>[] = [];
 
   let newHubUrl = cachedConfig.hubUrl;
   let newAdminKey = cachedConfig.adminApiKey;
   let newCfEnv = cachedConfig.cashfreeEnv;
-  let newCfAppId = cachedConfig.cashfreeAppId;
-  let newCfSecretKey = cachedConfig.cashfreeSecretKey;
+  let newCfTestAppId = cachedConfig.cashfreeTestAppId;
+  let newCfTestSecretKey = cachedConfig.cashfreeTestSecretKey;
+  let newCfProdAppId = cachedConfig.cashfreeProdAppId;
+  let newCfProdSecretKey = cachedConfig.cashfreeProdSecretKey;
   let newCfApiVersion = cachedConfig.cashfreeApiVersion;
+  let newSmtpHost = cachedConfig.smtpHost;
+  let newSmtpPort = cachedConfig.smtpPort;
+  let newSmtpUsername = cachedConfig.smtpUsername;
+  let newSmtpPassword = cachedConfig.smtpPassword;
+  let newSmtpUseTls = cachedConfig.smtpUseTls;
+  let newDefaultFromEmail = cachedConfig.defaultFromEmail;
+  let newDefaultFromName = cachedConfig.defaultFromName;
 
   if (params.hubUrl && params.hubUrl.trim().length > 0) {
     newHubUrl = cleanMultiUrls(params.hubUrl);
@@ -155,24 +218,119 @@ export async function saveHubConfig(params: {
     );
   }
 
-  if (params.cashfreeAppId !== undefined) {
-    newCfAppId = params.cashfreeAppId.trim();
+  // Handle Test Credentials
+  if (params.cashfreeTestAppId !== undefined) {
+    newCfTestAppId = params.cashfreeTestAppId.trim();
     updates.push(
       prisma.paymentHubConfig.upsert({
-        where: { key: "cashfree_app_id" },
-        update: { value: newCfAppId },
-        create: { key: "cashfree_app_id", value: newCfAppId },
+        where: { key: "cashfree_test_app_id" },
+        update: { value: newCfTestAppId },
+        create: { key: "cashfree_test_app_id", value: newCfTestAppId },
       })
     );
   }
 
+  if (params.cashfreeTestSecretKey !== undefined && params.cashfreeTestSecretKey.trim().length > 0) {
+    newCfTestSecretKey = params.cashfreeTestSecretKey.trim();
+    updates.push(
+      prisma.paymentHubConfig.upsert({
+        where: { key: "cashfree_test_secret_key" },
+        update: { value: newCfTestSecretKey },
+        create: { key: "cashfree_test_secret_key", value: newCfTestSecretKey },
+      })
+    );
+  }
+
+  // Handle Prod Credentials
+  if (params.cashfreeProdAppId !== undefined) {
+    newCfProdAppId = params.cashfreeProdAppId.trim();
+    updates.push(
+      prisma.paymentHubConfig.upsert({
+        where: { key: "cashfree_prod_app_id" },
+        update: { value: newCfProdAppId },
+        create: { key: "cashfree_prod_app_id", value: newCfProdAppId },
+      })
+    );
+  }
+
+  if (params.cashfreeProdSecretKey !== undefined && params.cashfreeProdSecretKey.trim().length > 0) {
+    newCfProdSecretKey = params.cashfreeProdSecretKey.trim();
+    updates.push(
+      prisma.paymentHubConfig.upsert({
+        where: { key: "cashfree_prod_secret_key" },
+        update: { value: newCfProdSecretKey },
+        create: { key: "cashfree_prod_secret_key", value: newCfProdSecretKey },
+      })
+    );
+  }
+
+  // Legacy single key compatibility if provided
+  if (params.cashfreeAppId !== undefined) {
+    const singleAppId = params.cashfreeAppId.trim();
+    if (newCfEnv === "PRODUCTION") {
+      newCfProdAppId = singleAppId;
+      updates.push(
+        prisma.paymentHubConfig.upsert({
+          where: { key: "cashfree_prod_app_id" },
+          update: { value: singleAppId },
+          create: { key: "cashfree_prod_app_id", value: singleAppId },
+        })
+      );
+    } else {
+      newCfTestAppId = singleAppId;
+      updates.push(
+        prisma.paymentHubConfig.upsert({
+          where: { key: "cashfree_test_app_id" },
+          update: { value: singleAppId },
+          create: { key: "cashfree_test_app_id", value: singleAppId },
+        })
+      );
+    }
+  }
+
   if (params.cashfreeSecretKey !== undefined && params.cashfreeSecretKey.trim().length > 0) {
-    newCfSecretKey = params.cashfreeSecretKey.trim();
+    const singleSecretKey = params.cashfreeSecretKey.trim();
+    if (newCfEnv === "PRODUCTION") {
+      newCfProdSecretKey = singleSecretKey;
+      updates.push(
+        prisma.paymentHubConfig.upsert({
+          where: { key: "cashfree_prod_secret_key" },
+          update: { value: singleSecretKey },
+          create: { key: "cashfree_prod_secret_key", value: singleSecretKey },
+        })
+      );
+    } else {
+      newCfTestSecretKey = singleSecretKey;
+      updates.push(
+        prisma.paymentHubConfig.upsert({
+          where: { key: "cashfree_test_secret_key" },
+          update: { value: singleSecretKey },
+          create: { key: "cashfree_test_secret_key", value: singleSecretKey },
+        })
+      );
+    }
+  }
+
+  // Derive active keys to keep legacy cashfree_app_id and cashfree_secret_key rows synchronized
+  const activeAppId = newCfEnv === "PRODUCTION" ? (newCfProdAppId || newCfTestAppId) : (newCfTestAppId || newCfProdAppId);
+  const activeSecretKey = newCfEnv === "PRODUCTION" ? (newCfProdSecretKey || newCfTestSecretKey) : (newCfTestSecretKey || newCfProdSecretKey);
+
+  if (activeAppId) {
+    updates.push(
+      prisma.paymentHubConfig.upsert({
+        where: { key: "cashfree_app_id" },
+        update: { value: activeAppId },
+        create: { key: "cashfree_app_id", value: activeAppId },
+      })
+    );
+  }
+
+  if (activeSecretKey) {
     updates.push(
       prisma.paymentHubConfig.upsert({
         where: { key: "cashfree_secret_key" },
-        update: { value: newCfSecretKey },
-        create: { key: "cashfree_secret_key", value: newCfSecretKey },
+        update: { value: activeSecretKey },
+        create: { key: "cashfree_secret_key", value: activeSecretKey },
       })
     );
   }
@@ -188,6 +346,84 @@ export async function saveHubConfig(params: {
     );
   }
 
+  // SMTP Settings
+  if (params.smtpHost !== undefined) {
+    newSmtpHost = params.smtpHost.trim();
+    updates.push(
+      prisma.paymentHubConfig.upsert({
+        where: { key: "smtp_host" },
+        update: { value: newSmtpHost },
+        create: { key: "smtp_host", value: newSmtpHost },
+      })
+    );
+  }
+
+  if (params.smtpPort !== undefined) {
+    newSmtpPort = Number(params.smtpPort) || 465;
+    updates.push(
+      prisma.paymentHubConfig.upsert({
+        where: { key: "smtp_port" },
+        update: { value: String(newSmtpPort) },
+        create: { key: "smtp_port", value: String(newSmtpPort) },
+      })
+    );
+  }
+
+  if (params.smtpUsername !== undefined) {
+    newSmtpUsername = params.smtpUsername.trim();
+    updates.push(
+      prisma.paymentHubConfig.upsert({
+        where: { key: "smtp_username" },
+        update: { value: newSmtpUsername },
+        create: { key: "smtp_username", value: newSmtpUsername },
+      })
+    );
+  }
+
+  if (params.smtpPassword !== undefined && params.smtpPassword.trim().length > 0) {
+    newSmtpPassword = params.smtpPassword.trim();
+    updates.push(
+      prisma.paymentHubConfig.upsert({
+        where: { key: "smtp_password" },
+        update: { value: newSmtpPassword },
+        create: { key: "smtp_password", value: newSmtpPassword },
+      })
+    );
+  }
+
+  if (params.smtpUseTls !== undefined) {
+    newSmtpUseTls = params.smtpUseTls;
+    updates.push(
+      prisma.paymentHubConfig.upsert({
+        where: { key: "smtp_use_tls" },
+        update: { value: String(newSmtpUseTls) },
+        create: { key: "smtp_use_tls", value: String(newSmtpUseTls) },
+      })
+    );
+  }
+
+  if (params.defaultFromEmail !== undefined) {
+    newDefaultFromEmail = params.defaultFromEmail.trim();
+    updates.push(
+      prisma.paymentHubConfig.upsert({
+        where: { key: "default_from_email" },
+        update: { value: newDefaultFromEmail },
+        create: { key: "default_from_email", value: newDefaultFromEmail },
+      })
+    );
+  }
+
+  if (params.defaultFromName !== undefined) {
+    newDefaultFromName = params.defaultFromName.trim();
+    updates.push(
+      prisma.paymentHubConfig.upsert({
+        where: { key: "default_from_name" },
+        update: { value: newDefaultFromName },
+        create: { key: "default_from_name", value: newDefaultFromName },
+      })
+    );
+  }
+
   await Promise.all(updates);
 
   // Update memory cache immediately
@@ -195,21 +431,25 @@ export async function saveHubConfig(params: {
     hubUrl: newHubUrl,
     adminApiKey: newAdminKey,
     cashfreeEnv: newCfEnv,
-    cashfreeAppId: newCfAppId,
-    cashfreeSecretKey: newCfSecretKey,
+    cashfreeAppId: activeAppId,
+    cashfreeSecretKey: activeSecretKey,
+    cashfreeTestAppId: newCfTestAppId,
+    cashfreeTestSecretKey: newCfTestSecretKey,
+    cashfreeProdAppId: newCfProdAppId,
+    cashfreeProdSecretKey: newCfProdSecretKey,
     cashfreeApiVersion: newCfApiVersion,
+    smtpHost: newSmtpHost,
+    smtpPort: newSmtpPort,
+    smtpUsername: newSmtpUsername,
+    smtpPassword: newSmtpPassword,
+    smtpUseTls: newSmtpUseTls,
+    defaultFromEmail: newDefaultFromEmail,
+    defaultFromName: newDefaultFromName,
     lastFetched: Date.now(),
   };
 
-  logger.info(`Updated payment_hub_config in database: hub_url=${newHubUrl}, cashfree_env=${newCfEnv}`);
-  return {
-    hubUrl: newHubUrl,
-    adminApiKey: newAdminKey,
-    cashfreeEnv: newCfEnv,
-    cashfreeAppId: newCfAppId,
-    cashfreeSecretKey: newCfSecretKey,
-    cashfreeApiVersion: newCfApiVersion,
-  };
+  logger.info(`Updated payment_hub_config in database: hub_url=${newHubUrl}, smtp_host=${newSmtpHost ? "configured" : "none"}`);
+  return cachedConfig;
 }
 
 /**
@@ -226,14 +466,7 @@ export function getHubUrls(): string[] {
 /**
  * Fetch latest config from database
  */
-export async function getHubConfig(): Promise<{
-  hubUrl: string;
-  adminApiKey: string;
-  cashfreeEnv: string;
-  cashfreeAppId: string;
-  cashfreeSecretKey: string;
-  cashfreeApiVersion: string;
-}> {
+export async function getHubConfig(): Promise<Omit<HubConfigCache, "lastFetched">> {
   const now = Date.now();
   if (now - cachedConfig.lastFetched < CACHE_TTL_MS) {
     return {
@@ -242,7 +475,18 @@ export async function getHubConfig(): Promise<{
       cashfreeEnv: cachedConfig.cashfreeEnv,
       cashfreeAppId: cachedConfig.cashfreeAppId,
       cashfreeSecretKey: cachedConfig.cashfreeSecretKey,
+      cashfreeTestAppId: cachedConfig.cashfreeTestAppId,
+      cashfreeTestSecretKey: cachedConfig.cashfreeTestSecretKey,
+      cashfreeProdAppId: cachedConfig.cashfreeProdAppId,
+      cashfreeProdSecretKey: cachedConfig.cashfreeProdSecretKey,
       cashfreeApiVersion: cachedConfig.cashfreeApiVersion,
+      smtpHost: cachedConfig.smtpHost,
+      smtpPort: cachedConfig.smtpPort,
+      smtpUsername: cachedConfig.smtpUsername,
+      smtpPassword: cachedConfig.smtpPassword ? "••••••••" : "",
+      smtpUseTls: cachedConfig.smtpUseTls,
+      defaultFromEmail: cachedConfig.defaultFromEmail,
+      defaultFromName: cachedConfig.defaultFromName,
     };
   }
 
@@ -256,9 +500,23 @@ export async function getHubConfig(): Promise<{
     const hubUrl = cleanMultiUrls(configMap["hub_url"] || cachedConfig.hubUrl);
     const adminApiKey = (configMap["admin_api_key"] || cachedConfig.adminApiKey).trim();
     const cashfreeEnv = (configMap["cashfree_env"] || cachedConfig.cashfreeEnv || "TEST").trim().toUpperCase();
-    const cashfreeAppId = (configMap["cashfree_app_id"] || cachedConfig.cashfreeAppId).trim();
-    const cashfreeSecretKey = (configMap["cashfree_secret_key"] || cachedConfig.cashfreeSecretKey).trim();
+
+    const cashfreeTestAppId = (configMap["cashfree_test_app_id"] || configMap["cashfree_app_id"] || cachedConfig.cashfreeTestAppId || "").trim();
+    const cashfreeTestSecretKey = (configMap["cashfree_test_secret_key"] || configMap["cashfree_secret_key"] || cachedConfig.cashfreeTestSecretKey || "").trim();
+    const cashfreeProdAppId = (configMap["cashfree_prod_app_id"] || (cashfreeEnv === "PRODUCTION" ? configMap["cashfree_app_id"] : "") || cachedConfig.cashfreeProdAppId || "").trim();
+    const cashfreeProdSecretKey = (configMap["cashfree_prod_secret_key"] || (cashfreeEnv === "PRODUCTION" ? configMap["cashfree_secret_key"] : "") || cachedConfig.cashfreeProdSecretKey || "").trim();
+
+    const cashfreeAppId = cashfreeEnv === "PRODUCTION" ? (cashfreeProdAppId || cashfreeTestAppId) : (cashfreeTestAppId || cashfreeProdAppId);
+    const cashfreeSecretKey = cashfreeEnv === "PRODUCTION" ? (cashfreeProdSecretKey || cashfreeTestSecretKey) : (cashfreeTestSecretKey || cashfreeProdSecretKey);
     const cashfreeApiVersion = (configMap["cashfree_api_version"] || cachedConfig.cashfreeApiVersion || "2023-08-01").trim();
+
+    const smtpHost = (configMap["smtp_host"] || process.env.SMTP_HOST || cachedConfig.smtpHost).trim();
+    const smtpPort = Number(configMap["smtp_port"] || process.env.SMTP_PORT || cachedConfig.smtpPort || 465);
+    const smtpUsername = (configMap["smtp_username"] || process.env.SMTP_USER || cachedConfig.smtpUsername).trim();
+    const smtpPassword = (configMap["smtp_password"] || process.env.SMTP_PASSWORD || cachedConfig.smtpPassword).trim();
+    const smtpUseTls = configMap["smtp_use_tls"] !== undefined ? configMap["smtp_use_tls"] !== "false" : cachedConfig.smtpUseTls;
+    const defaultFromEmail = (configMap["default_from_email"] || process.env.SMTP_FROM_EMAIL || cachedConfig.defaultFromEmail || smtpUsername).trim();
+    const defaultFromName = (configMap["default_from_name"] || cachedConfig.defaultFromName || "Ace Payment Hub").trim();
 
     cachedConfig = {
       hubUrl,
@@ -266,7 +524,18 @@ export async function getHubConfig(): Promise<{
       cashfreeEnv,
       cashfreeAppId,
       cashfreeSecretKey,
+      cashfreeTestAppId,
+      cashfreeTestSecretKey,
+      cashfreeProdAppId,
+      cashfreeProdSecretKey,
       cashfreeApiVersion,
+      smtpHost,
+      smtpPort,
+      smtpUsername,
+      smtpPassword,
+      smtpUseTls,
+      defaultFromEmail,
+      defaultFromName,
       lastFetched: now,
     };
 
@@ -276,7 +545,18 @@ export async function getHubConfig(): Promise<{
       cashfreeEnv,
       cashfreeAppId,
       cashfreeSecretKey,
+      cashfreeTestAppId,
+      cashfreeTestSecretKey,
+      cashfreeProdAppId,
+      cashfreeProdSecretKey,
       cashfreeApiVersion,
+      smtpHost,
+      smtpPort,
+      smtpUsername,
+      smtpPassword: smtpPassword ? "••••••••" : "",
+      smtpUseTls,
+      defaultFromEmail,
+      defaultFromName,
     };
   } catch (err: any) {
     return {
@@ -285,9 +565,55 @@ export async function getHubConfig(): Promise<{
       cashfreeEnv: cachedConfig.cashfreeEnv,
       cashfreeAppId: cachedConfig.cashfreeAppId,
       cashfreeSecretKey: cachedConfig.cashfreeSecretKey,
+      cashfreeTestAppId: cachedConfig.cashfreeTestAppId,
+      cashfreeTestSecretKey: cachedConfig.cashfreeTestSecretKey,
+      cashfreeProdAppId: cachedConfig.cashfreeProdAppId,
+      cashfreeProdSecretKey: cachedConfig.cashfreeProdSecretKey,
       cashfreeApiVersion: cachedConfig.cashfreeApiVersion,
+      smtpHost: cachedConfig.smtpHost,
+      smtpPort: cachedConfig.smtpPort,
+      smtpUsername: cachedConfig.smtpUsername,
+      smtpPassword: cachedConfig.smtpPassword ? "••••••••" : "",
+      smtpUseTls: cachedConfig.smtpUseTls,
+      defaultFromEmail: cachedConfig.defaultFromEmail,
+      defaultFromName: cachedConfig.defaultFromName,
     };
   }
+}
+
+/**
+ * Synchronous getter for SMTP email configuration
+ */
+export function getCachedEmailConfig(): {
+  smtpHost: string;
+  smtpPort: number;
+  smtpUsername: string;
+  smtpPassword: string;
+  smtpUseTls: boolean;
+  defaultFromEmail: string;
+  defaultFromName: string;
+  isConfigured: boolean;
+} {
+  ensureBackgroundInit();
+  const host = cachedConfig.smtpHost || process.env.SMTP_HOST || "";
+  const port = cachedConfig.smtpPort || Number(process.env.SMTP_PORT || 465);
+  const user = cachedConfig.smtpUsername || process.env.SMTP_USER || "";
+  const pass = cachedConfig.smtpPassword || process.env.SMTP_PASSWORD || "";
+  const useTls = cachedConfig.smtpUseTls;
+  const fromEmail = cachedConfig.defaultFromEmail || process.env.SMTP_FROM_EMAIL || user;
+  const fromName = cachedConfig.defaultFromName || "Ace Payment Hub";
+  const isConfigured = Boolean(host && user && pass);
+
+  return {
+    smtpHost: host,
+    smtpPort: port,
+    smtpUsername: user,
+    smtpPassword: pass,
+    smtpUseTls: useTls,
+    defaultFromEmail: fromEmail,
+    defaultFromName: fromName,
+    isConfigured,
+  };
 }
 
 /**
@@ -296,6 +622,10 @@ export async function getHubConfig(): Promise<{
 export function getCachedCashfreeConfig(): {
   appId: string;
   secretKey: string;
+  testAppId: string;
+  testSecretKey: string;
+  prodAppId: string;
+  prodSecretKey: string;
   env: string;
   apiVersion: string;
   isProd: boolean;
@@ -304,14 +634,21 @@ export function getCachedCashfreeConfig(): {
   ensureBackgroundInit();
   const env = (cachedConfig.cashfreeEnv || "TEST").trim().toUpperCase();
   const isProd = env === "PRODUCTION";
-  const appId = (cachedConfig.cashfreeAppId || "").trim();
-  const secretKey = (cachedConfig.cashfreeSecretKey || "").trim();
+
+  const testAppId = (cachedConfig.cashfreeTestAppId || cachedConfig.cashfreeAppId || "").trim();
+  const testSecretKey = (cachedConfig.cashfreeTestSecretKey || cachedConfig.cashfreeSecretKey || "").trim();
+  const prodAppId = (cachedConfig.cashfreeProdAppId || "").trim();
+  const prodSecretKey = (cachedConfig.cashfreeProdSecretKey || "").trim();
+
+  // Active credentials selected based on current active environment mode
+  const appId = isProd ? (prodAppId || testAppId) : (testAppId || prodAppId);
+  const secretKey = isProd ? (prodSecretKey || testSecretKey) : (testSecretKey || prodSecretKey);
   const apiVersion = (cachedConfig.cashfreeApiVersion || "2023-08-01").trim();
   const baseUrl = isProd
     ? "https://api.cashfree.com/pg"
     : "https://sandbox.cashfree.com/pg";
 
-  return { appId, secretKey, env, apiVersion, isProd, baseUrl };
+  return { appId, secretKey, testAppId, testSecretKey, prodAppId, prodSecretKey, env, apiVersion, isProd, baseUrl };
 }
 
 /**

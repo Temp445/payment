@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Layers, Filter, ShieldCheck, Lock, RefreshCw } from "lucide-react";
+import { Filter, Lock, RefreshCw, Loader2 } from "lucide-react";
 
 interface AppFilterBarProps {
   applications: { id: string; appCode: string; appName: string }[];
@@ -18,15 +18,28 @@ export function AppFilterBar({
   isRestricted = false,
 }: AppFilterBarProps) {
   const router = useRouter();
+  const [localAppId, setLocalAppId] = useState(selectedAppId || "ALL");
+  const [isPending, startTransition] = useTransition();
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Keep local state in sync when URL searchParams update
+  useEffect(() => {
+    setLocalAppId(selectedAppId || "ALL");
+  }, [selectedAppId]);
 
   function handleChange(e: React.ChangeEvent<HTMLSelectElement>) {
     const val = e.target.value;
-    if (val === "ALL") {
-      router.push("/");
-    } else {
-      router.push(`/?app=${encodeURIComponent(val)}`);
-    }
+    // 1. Immediately reflect the chosen option in the select dropdown (0ms)
+    setLocalAppId(val);
+
+    // 2. Perform smooth router navigation inside React transition
+    startTransition(() => {
+      if (val === "ALL") {
+        router.push("/");
+      } else {
+        router.push(`/?app=${encodeURIComponent(val)}`);
+      }
+    });
   }
 
   function handleRefresh() {
@@ -46,6 +59,12 @@ export function AppFilterBar({
             <span className="font-semibold text-xs text-[var(--foreground)]">
               Application Volume Filter
             </span>
+            {isPending && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 animate-pulse">
+                <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                Updating metrics...
+              </span>
+            )}
             {isRestricted && (
               <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/30">
                 <Lock className="w-2.5 h-2.5" />
@@ -62,30 +81,37 @@ export function AppFilterBar({
       </div>
 
       <div className="w-full sm:w-auto shrink-0 flex items-center gap-2">
-        <select
-          value={selectedAppId || "ALL"}
-          onChange={handleChange}
-          aria-label="Filter dashboard by application"
-          className="w-full sm:w-64 px-3 py-2 rounded-lg bg-[var(--background)] border border-[var(--border)] text-xs text-[var(--foreground)] focus:outline-none focus:border-blue-500 transition font-medium cursor-pointer"
-        >
-          {userRole === "ADMIN" && (
-            <option value="ALL">All Applications (Consolidated Total)</option>
+        <div className="relative w-full sm:w-64">
+          <select
+            value={localAppId}
+            onChange={handleChange}
+            aria-label="Filter dashboard by application"
+            className="w-full px-3 py-2 rounded-lg bg-[var(--background)] border border-[var(--border)] text-xs text-[var(--foreground)] focus:outline-none focus:border-blue-500 transition font-medium cursor-pointer pr-8"
+          >
+            {userRole === "ADMIN" && (
+              <option value="ALL">All Applications (Consolidated Total)</option>
+            )}
+            {applications.map((app) => (
+              <option key={app.id} value={app.id}>
+                {app.appCode} — {app.appName}
+              </option>
+            ))}
+            {applications.length === 0 && (
+              <option value="" disabled>
+                No applications available
+              </option>
+            )}
+          </select>
+          {isPending && (
+            <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none">
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-400" />
+            </div>
           )}
-          {applications.map((app) => (
-            <option key={app.id} value={app.id}>
-              {app.appCode} — {app.appName}
-            </option>
-          ))}
-          {applications.length === 0 && (
-            <option value="" disabled>
-              No applications available
-            </option>
-          )}
-        </select>
+        </div>
 
         <button
           onClick={handleRefresh}
-          disabled={isRefreshing}
+          disabled={isRefreshing || isPending}
           className="p-2 rounded-lg border border-[var(--border)] text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-slate-800 transition flex items-center gap-1.5 shrink-0"
           title="Refresh dashboard metrics"
         >

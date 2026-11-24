@@ -9,7 +9,8 @@ export async function GET() {
       where: { key: "allow_public_signup" },
     });
 
-    let allowPublicSignup = config ? config.value !== "false" : true;
+    // Default to false (Invite Only) unless explicitly enabled
+    let allowPublicSignup = config ? config.value === "true" : false;
 
     // Check total registered users in Supabase auth.users table
     let userCount = 0;

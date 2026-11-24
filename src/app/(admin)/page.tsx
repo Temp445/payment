@@ -80,18 +80,20 @@ async function OverviewContent({
   const role: "ADMIN" | "EMPLOYEE" = (appMeta.role || userMeta.role || "EMPLOYEE").toUpperCase() === "ADMIN" ? "ADMIN" : "EMPLOYEE";
   const userAllowedAppIds: string[] = Array.isArray(appMeta.allowed_app_ids) ? appMeta.allowed_app_ids : [];
 
-  // 1. Fetch available apps from database
+  // 1. Fetch available apps from database once (active and inactive)
   const allApps = await prisma.application.findMany({
-    where: { isActive: true },
-    select: { id: true, appCode: true, appName: true },
+    select: { id: true, appCode: true, appName: true, isActive: true },
     orderBy: { appCode: "asc" },
   });
 
-  // Filter selectable apps for current user
-  const selectableApps =
+  const userScopedApps =
     role === "ADMIN"
       ? allApps
       : allApps.filter((a) => userAllowedAppIds.includes(a.id));
+
+  const selectableApps = userScopedApps.filter((a) => a.isActive);
+  const activeAppsCount = selectableApps.length;
+  const totalAppsCount = userScopedApps.length;
 
   // Determine query condition based on role and selected app
   const requestedApp = searchParams?.app;
@@ -126,8 +128,6 @@ async function OverviewContent({
   let initiatedVolume = 0;
   let totalOrdersCount = 0;
   let paidOrdersCount = 0;
-  let activeAppsCount = 0;
-  let totalAppsCount = 0;
   let pendingOutboxCount = 0;
   let recentOrders: any[] = [];
   let volumeChartData: any[] = [];
@@ -138,46 +138,31 @@ async function OverviewContent({
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
     sevenDaysAgo.setHours(0, 0, 0, 0);
 
-    // Auto-expire stale orders in parallel with dashboard queries to avoid blocking
-    const expirePromise = OrderService.autoExpireStaleOrders(20).catch((e) => {
-      console.warn("Auto-expire skipped:", e.message);
-      return 0;
-    });
-
     const [
-      volumeAgg,
       initiatedAgg,
-      totalCount,
-      paidCount,
-      activeApps,
-      totalApps,
+      paidAgg,
       outboxCount,
       orders,
       payments,
       recentPaidOrders,
     ] = await Promise.all([
-      prisma.order.aggregate({
-        where: { ...appFilterCondition, orderStatus: "PAID" },
-        _sum: { orderAmount: true },
-      }),
+      // 1. Consolidated total orders aggregate (sum + count)
       prisma.order.aggregate({
         where: appFilterCondition,
         _sum: { orderAmount: true },
+        _count: { id: true },
       }),
-      prisma.order.count({ where: appFilterCondition }),
-      prisma.order.count({ where: { ...appFilterCondition, orderStatus: "PAID" } }),
-      prisma.application.count({
-        where: {
-          isActive: true,
-          ...(role === "ADMIN" ? {} : { id: { in: userAllowedAppIds } }),
-        },
+      // 2. Consolidated paid orders aggregate (sum + count)
+      prisma.order.aggregate({
+        where: { ...appFilterCondition, orderStatus: "PAID" },
+        _sum: { orderAmount: true },
+        _count: { id: true },
       }),
-      prisma.application.count({
-        where: role === "ADMIN" ? {} : { id: { in: userAllowedAppIds } },
-      }),
+      // 3. Pending webhook outbox count
       prisma.webhookOutboxQueue.count({
         where: { status: { in: ["PENDING", "PROCESSING"] } },
       }),
+      // 4. Recent orders for table
       prisma.order.findMany({
         where: appFilterCondition,
         take: 8,
@@ -188,18 +173,20 @@ async function OverviewContent({
           refunds: { select: { refundStatus: true, refundAmount: true } },
         },
       }),
+      // 5. Recent successful payments for method mix breakdown
       prisma.payment.findMany({
         where: {
           paymentStatus: "SUCCESS",
           ...(Object.keys(appFilterCondition).length > 0 ? { order: appFilterCondition } : {}),
         },
-        take: 300,
+        take: 150,
         orderBy: { createdAt: "desc" },
         select: {
           paymentMethod: true,
           paymentGroup: true,
         },
       }),
+      // 6. Paid orders within the last 7 days for volume chart and live/sandbox breakdown
       prisma.order.findMany({
         where: {
           ...appFilterCondition,
@@ -213,8 +200,8 @@ async function OverviewContent({
           orderNote: true,
           cfOrderId: true,
         },
+        take: 500,
       }),
-      expirePromise,
     ]);
 
     const allPaidOrders = recentPaidOrders;
@@ -230,12 +217,10 @@ async function OverviewContent({
       }
     });
 
-    totalVolume = Number(volumeAgg._sum.orderAmount || 0);
+    totalVolume = Number(paidAgg._sum.orderAmount || 0);
+    paidOrdersCount = paidAgg._count.id || 0;
     initiatedVolume = Number(initiatedAgg._sum.orderAmount || 0);
-    totalOrdersCount = totalCount;
-    paidOrdersCount = paidCount;
-    activeAppsCount = activeApps;
-    totalAppsCount = totalApps;
+    totalOrdersCount = initiatedAgg._count.id || 0;
     pendingOutboxCount = outboxCount;
     recentOrders = orders;
 
@@ -466,8 +451,9 @@ async function OverviewContent({
 }
 
 export default function OverviewPage(props: { searchParams?: { app?: string } }) {
+  const currentAppKey = props.searchParams?.app || "ALL";
   return (
-    <Suspense fallback={<DashboardSkeleton />}>
+    <Suspense key={currentAppKey} fallback={<DashboardSkeleton />}>
       <OverviewContent {...props} />
     </Suspense>
   );

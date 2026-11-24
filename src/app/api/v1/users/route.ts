@@ -67,7 +67,7 @@ export async function GET(req: NextRequest) {
     const signupLockConfig = await prisma.paymentHubConfig.findUnique({
       where: { key: "allow_public_signup" },
     });
-    const allowPublicSignup = signupLockConfig ? signupLockConfig.value !== "false" : true;
+    const allowPublicSignup = signupLockConfig ? signupLockConfig.value === "true" : false;
 
     // 2. Query available active applications
     const availableApps = await prisma.application.findMany({

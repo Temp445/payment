@@ -201,9 +201,9 @@ export default function SignUpPage() {
               <ShieldAlert className="w-6 h-6" />
             </div>
             <div className="space-y-1.5">
-              <h2 className="text-base font-bold text-white">Registration Locked</h2>
+              <h2 className="text-base font-bold text-white">Registration is Invite-Only</h2>
               <p className="text-xs text-slate-400 leading-relaxed max-w-xs mx-auto">
-                New user sign-ups are currently locked by the administrator. Please reach out to your system administrator for access.
+                Access to this Payment Hub is restricted. Please contact your company administrator to receive an invitation link.
               </p>
             </div>
             <Link

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAdminAuth } from "@/lib/auth";
 import { getHubConfig, saveHubConfig } from "@/lib/config";
-import { CashfreeAdapter } from "@/lib/cashfree";
+import { verifySmtpConnection, sendTestEmail } from "@/lib/email";
 import { z } from "zod";
 
 const settingsSchema = z.object({
@@ -33,7 +33,20 @@ const settingsSchema = z.object({
     .optional(),
   cashfreeAppId: z.string().trim().optional(),
   cashfreeSecretKey: z.string().trim().optional(),
+  cashfreeTestAppId: z.string().trim().optional(),
+  cashfreeTestSecretKey: z.string().trim().optional(),
+  cashfreeProdAppId: z.string().trim().optional(),
+  cashfreeProdSecretKey: z.string().trim().optional(),
   cashfreeApiVersion: z.string().trim().optional(),
+
+  // Email / Outbound SMTP Settings
+  smtpHost: z.string().trim().optional(),
+  smtpPort: z.number().optional(),
+  smtpUsername: z.string().trim().optional(),
+  smtpPassword: z.string().trim().optional(),
+  smtpUseTls: z.boolean().optional(),
+  defaultFromEmail: z.string().trim().optional(),
+  defaultFromName: z.string().trim().optional(),
 });
 
 export async function GET(req: NextRequest) {
@@ -45,26 +58,53 @@ export async function GET(req: NextRequest) {
 
     const config = await getHubConfig();
 
-    // Check if test connection requested: /api/v1/settings?test_connection=true
+    // Check if test SMTP connection requested: /api/v1/settings?test_smtp=true
     const url = new URL(req.url);
+    if (url.searchParams.get("test_smtp") === "true") {
+      const res = await verifySmtpConnection();
+      return NextResponse.json({
+        success: res.success,
+        connectionStatus: res.success ? "CONNECTED" : "FAILED",
+        message: res.message,
+        error: res.success ? undefined : res.message,
+      });
+    }
+
+    // Check if test connection requested: /api/v1/settings?test_connection=true
     if (url.searchParams.get("test_connection") === "true") {
       try {
         const { getCachedCashfreeConfig } = await import("@/lib/config");
-        const { appId, secretKey, apiVersion, baseUrl } = getCachedCashfreeConfig();
+        const cfConfig = getCachedCashfreeConfig();
 
-        if (!appId || !secretKey) {
+        // Allow explicitly testing TEST or PRODUCTION via query param: ?test_connection=true&mode=TEST
+        const requestedMode = (url.searchParams.get("mode") || cfConfig.env).toUpperCase();
+        const isProdCheck = requestedMode === "PRODUCTION";
+
+        const appIdToCheck = isProdCheck
+          ? (cfConfig.prodAppId || cfConfig.appId)
+          : (cfConfig.testAppId || cfConfig.appId);
+
+        const secretKeyToCheck = isProdCheck
+          ? (cfConfig.prodSecretKey || cfConfig.secretKey)
+          : (cfConfig.testSecretKey || cfConfig.secretKey);
+
+        const baseUrlToCheck = isProdCheck
+          ? "https://api.cashfree.com/pg"
+          : "https://sandbox.cashfree.com/pg";
+
+        if (!appIdToCheck || !secretKeyToCheck) {
           return NextResponse.json({
             success: false,
             connectionStatus: "FAILED",
-            error: "App ID and Secret Key cannot be empty.",
+            error: `App ID and Secret Key for ${requestedMode} environment cannot be empty.`,
           });
         }
 
-        const res = await fetch(`${baseUrl}/orders/probe_connection_check`, {
+        const res = await fetch(`${baseUrlToCheck}/orders/probe_connection_check`, {
           headers: {
-            "x-client-id": appId,
-            "x-client-secret": secretKey,
-            "x-api-version": apiVersion,
+            "x-client-id": appIdToCheck,
+            "x-client-secret": secretKeyToCheck,
+            "x-api-version": cfConfig.apiVersion,
           },
         });
         const data = await res.json();
@@ -73,14 +113,15 @@ export async function GET(req: NextRequest) {
           return NextResponse.json({
             success: false,
             connectionStatus: "FAILED",
-            error: data.message || "Cashfree authentication failed. Please verify your App ID and Secret Key.",
+            error: data.message || `Cashfree ${requestedMode} authentication failed. Please verify your ${requestedMode} App ID and Secret Key.`,
           });
         }
 
         return NextResponse.json({
           success: true,
           connectionStatus: "CONNECTED",
-          message: "Cashfree gateway connection verified successfully! Credentials are active and valid.",
+          testedEnv: requestedMode,
+          message: `Cashfree ${requestedMode} gateway connection verified successfully! Credentials are active and valid.`,
         });
       } catch (connErr: any) {
         return NextResponse.json({
@@ -108,6 +149,31 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
+
+    // Handle test email dispatch: /api/v1/settings?test_send=true
+    const url = new URL(req.url);
+    if (url.searchParams.get("test_send") === "true") {
+      const targetEmail = body.testEmail || body.email;
+      if (!targetEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(targetEmail)) {
+        return NextResponse.json(
+          { success: false, error: "A valid test recipient email address is required" },
+          { status: 400 }
+        );
+      }
+      const testRes = await sendTestEmail(targetEmail);
+      if (!testRes.success) {
+        return NextResponse.json(
+          { success: false, error: testRes.error || "Failed to dispatch test email" },
+          { status: 500 }
+        );
+      }
+      return NextResponse.json({
+        success: true,
+        message: `Test email successfully dispatched to ${targetEmail}! Please check your inbox.`,
+        messageId: testRes.messageId,
+      });
+    }
+
     const validation = settingsSchema.safeParse(body);
     if (!validation.success) {
       return NextResponse.json(
@@ -122,7 +188,18 @@ export async function POST(req: NextRequest) {
       cashfreeEnv,
       cashfreeAppId,
       cashfreeSecretKey,
+      cashfreeTestAppId,
+      cashfreeTestSecretKey,
+      cashfreeProdAppId,
+      cashfreeProdSecretKey,
       cashfreeApiVersion,
+      smtpHost,
+      smtpPort,
+      smtpUsername,
+      smtpPassword,
+      smtpUseTls,
+      defaultFromEmail,
+      defaultFromName,
     } = validation.data;
 
     const hasAnyField =
@@ -131,7 +208,18 @@ export async function POST(req: NextRequest) {
       cashfreeEnv ||
       cashfreeAppId !== undefined ||
       cashfreeSecretKey !== undefined ||
-      cashfreeApiVersion;
+      cashfreeTestAppId !== undefined ||
+      cashfreeTestSecretKey !== undefined ||
+      cashfreeProdAppId !== undefined ||
+      cashfreeProdSecretKey !== undefined ||
+      cashfreeApiVersion ||
+      smtpHost !== undefined ||
+      smtpPort !== undefined ||
+      smtpUsername !== undefined ||
+      smtpPassword !== undefined ||
+      smtpUseTls !== undefined ||
+      defaultFromEmail !== undefined ||
+      defaultFromName !== undefined;
 
     if (!hasAnyField) {
       return NextResponse.json(
@@ -146,12 +234,23 @@ export async function POST(req: NextRequest) {
       cashfreeEnv,
       cashfreeAppId,
       cashfreeSecretKey,
+      cashfreeTestAppId,
+      cashfreeTestSecretKey,
+      cashfreeProdAppId,
+      cashfreeProdSecretKey,
       cashfreeApiVersion,
+      smtpHost,
+      smtpPort,
+      smtpUsername,
+      smtpPassword,
+      smtpUseTls,
+      defaultFromEmail,
+      defaultFromName,
     });
 
     return NextResponse.json({
       success: true,
-      message: "Settings saved to database successfully! Cashfree credentials and Hub URLs updated live.",
+      message: "Settings saved to database successfully! Configuration updated live.",
       settings: updated,
     });
   } catch (error: any) {
