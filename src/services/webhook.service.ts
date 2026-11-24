@@ -5,7 +5,6 @@ import { canTransitionOrder } from "@/lib/stateMachine";
 import { OutboxWorker } from "@/lib/outboxWorker";
 import { logger } from "@/lib/logger";
 import { OrderStatus, PaymentStatus } from "@prisma/client";
-import { SubscriptionService } from "./subscription.service";
 
 export class WebhookService {
   /**
@@ -256,38 +255,6 @@ export class WebhookService {
           updatedAt: new Date(),
         },
       });
-
-      // 7b. Centralized Subscription Engine Fulfillment
-      const metadata: any = order.metadata || {};
-      if (
-        targetOrderStatus === "PAID" &&
-        metadata?.organization_id &&
-        metadata?.product_id &&
-        metadata?.offer_id
-      ) {
-        try {
-          await SubscriptionService.recordSubscriptionTransaction({
-            gatewayPaymentId: cfPaymentId,
-            gatewayOrderId: order.appOrderId,
-            gatewaySignature: signature || "HUB_VERIFIED",
-            gatewayName: "CASHFREE",
-            amount: paymentAmount,
-            currency: paymentCurrency,
-            status: "PAID",
-            receiptNumber: metadata.receipt_number || `REC_${order.appOrderId}`,
-            productId: metadata.product_id,
-            offerId: metadata.offer_id,
-            offerPeriod: Number(metadata.offer_period || 1),
-            offerPeriodType: metadata.offer_period_type || "month",
-            organizationId: metadata.organization_id,
-            userId: metadata.user_id || undefined,
-            applicationId: order.applicationId,
-          });
-          logger.info(`Subscription transaction auto-activated for org ${metadata.organization_id}`);
-        } catch (subErr: any) {
-          logger.warn(`Subscription activation skipped: ${subErr.message}`);
-        }
-      }
 
       // Record in Audit Log
       await tx.auditLog.create({

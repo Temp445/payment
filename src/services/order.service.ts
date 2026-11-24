@@ -3,7 +3,6 @@ import { CashfreeAdapter } from "@/lib/cashfree";
 import { AuthenticatedApp } from "@/lib/auth";
 import { logger } from "@/lib/logger";
 import { getCachedCashfreeConfig, ensureHubConfigLoaded } from "@/lib/config";
-import { SubscriptionService } from "./subscription.service";
 import { OutboxWorker } from "@/lib/outboxWorker";
 
 export interface CreateOrderInput {
@@ -367,34 +366,9 @@ export class OrderService {
 
             order.orderStatus = "PAID";
 
-            // Only the single request that transitioned the status executes side-effects (Subscription & Outbox)
+            // Only the single request that transitioned the status executes side-effects (Outbox)
             if (isFirstToTransition) {
-              // Centralized Subscription Engine: Auto-activate subscription if order has metadata
               const metadata: any = order.metadata || {};
-              if (metadata?.organization_id && metadata?.product_id && metadata?.offer_id) {
-                try {
-                  await SubscriptionService.recordSubscriptionTransaction({
-                    gatewayPaymentId: String(successPayment.cf_payment_id),
-                    gatewayOrderId: order.appOrderId,
-                    gatewaySignature: "HUB_POLL_VERIFIED",
-                    gatewayName: "CASHFREE",
-                    amount: paymentAmount,
-                    currency: "INR",
-                    status: "PAID",
-                    receiptNumber: metadata.receipt_number || `REC_${order.appOrderId}`,
-                    productId: metadata.product_id,
-                    offerId: metadata.offer_id,
-                    offerPeriod: Number(metadata.offer_period || 1),
-                    offerPeriodType: metadata.offer_period_type || "month",
-                    organizationId: metadata.organization_id,
-                    userId: metadata.user_id || undefined,
-                    applicationId: order.applicationId,
-                  });
-                  logger.info(`Subscription auto-activated for organization ${metadata.organization_id}`);
-                } catch (subErr: any) {
-                  logger.warn(`Subscription activation skipped or table pending: ${subErr.message}`);
-                }
-              }
 
               // Outbox Dispatch: Enqueue webhook notification to client app if configured
               if (app.webhookUrl) {

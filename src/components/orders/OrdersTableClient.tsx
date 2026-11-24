@@ -24,6 +24,7 @@ import {
   RotateCcw,
   Shield,
   RefreshCw,
+  Download,
 } from "lucide-react";
 
 interface OrdersTableClientProps {
@@ -233,6 +234,72 @@ export function OrdersTableClient({ initialOrders }: OrdersTableClientProps) {
     return pages;
   };
 
+  const handleExportCSV = () => {
+    if (filteredOrders.length === 0) return;
+
+    const headers = [
+      "Order ID",
+      "Cashfree Order ID",
+      "Application",
+      "Customer Name",
+      "Customer Phone",
+      "Customer Email",
+      "Amount",
+      "Currency",
+      "Order Status",
+      "Payment Status",
+      "Payment ID",
+      "Payment Method",
+      "Bank Reference",
+      "Environment",
+      "Order Note",
+      "Created Date",
+    ];
+
+    const escapeCSV = (val: any) => {
+      if (val === null || val === undefined) return '""';
+      const str = String(val).replace(/"/g, '""');
+      return `"${str}"`;
+    };
+
+    const rows = filteredOrders.map((o) => {
+      const p = Array.isArray(o.payments) && o.payments.length > 0 ? o.payments[0] : null;
+      const displayStatus = getOrderDisplayStatus(o);
+      const env = getOrderEnvironment(o);
+
+      return [
+        escapeCSV(o.appOrderId),
+        escapeCSV(o.cfOrderId),
+        escapeCSV(o.application?.appCode || ""),
+        escapeCSV(o.customerName || ""),
+        escapeCSV(o.customerPhone || ""),
+        escapeCSV(o.customerEmail || ""),
+        escapeCSV(Number(o.orderAmount || 0).toFixed(2)),
+        escapeCSV(o.orderCurrency || "INR"),
+        escapeCSV(displayStatus.status),
+        escapeCSV(p?.paymentStatus || "-"),
+        escapeCSV(p?.cfPaymentId || "-"),
+        escapeCSV(p?.paymentMethod || p?.paymentGroup || "-"),
+        escapeCSV(p?.bankReference || "-"),
+        escapeCSV(env),
+        escapeCSV(o.orderNote || ""),
+        escapeCSV(formatDate(o.createdAt)),
+      ].join(",");
+    });
+
+    const csvContent = "\uFEFF" + [headers.join(","), ...rows].join("\r\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const dateStr = new Date().toISOString().slice(0, 10);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `Live_Orders_Transactions_${dateStr}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="space-y-4">
       {/* Search and Filters */}
@@ -350,6 +417,17 @@ export function OrdersTableClient({ initialOrders }: OrdersTableClientProps) {
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin text-blue-400" : ""}`} />
             <span className="hidden sm:inline font-medium">Refresh</span>
+          </button>
+
+          {/* Export CSV Button */}
+          <button
+            onClick={handleExportCSV}
+            disabled={filteredOrders.length === 0}
+            className="p-2 sm:px-3 sm:py-2 rounded-lg border border-[var(--border)] text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed transition flex items-center gap-1.5 shrink-0"
+            title={`Export ${filteredOrders.length} records to CSV`}
+          >
+            <Download className="w-3.5 h-3.5 text-blue-400" />
+            <span className="hidden sm:inline font-medium">Export CSV ({filteredOrders.length})</span>
           </button>
         </div>
       </div>

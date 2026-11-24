@@ -501,7 +501,7 @@ export default function ApplicationsPage() {
               <form onSubmit={handleCreateApp} className="space-y-4 text-xs">
                 <div>
                   <label className="block text-[var(--muted-foreground)] mb-1">
-                    App Code (e.g. ACE_CRM,WEBSITE_02, ANDROID_APP)
+                    App Code (e.g. ACE_CRM, WEBSITE_02, ANDROID_APP)
                   </label>
                   <input
                     type="text"
