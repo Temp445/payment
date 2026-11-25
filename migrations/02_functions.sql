@@ -1,32 +1,24 @@
--- ====================================================================
--- Supabase Automated Outbox Worker Trigger & Cron (pg_net + pg_cron)
--- Multi-URL Support: Dispatches to all configured URLs (e.g. localhost:3000, localhost:3002, Netlify)
--- ====================================================================
+-- ==============================================================================
+-- 02_FUNCTIONS.SQL: Stored Procedures & Business Logic Functions
+-- ==============================================================================
 
--- 1. Enable Required Supabase Extensions
+-- 1. Enable Required Supabase Network Extension (for async HTTP dispatch)
 CREATE EXTENSION IF NOT EXISTS pg_net;
-CREATE EXTENSION IF NOT EXISTS pg_cron;
 
--- 2. Configuration Table for Dynamic Webhook Dispatch
-CREATE TABLE IF NOT EXISTS "payment_hub_config" (
-    "key" VARCHAR(50) PRIMARY KEY,
-    "value" TEXT NOT NULL,
-    "updated_at" TIMESTAMPTZ DEFAULT NOW()
-);
-
--- 3. Trigger Function: Dispatches HTTP POST to all configured URLs on INSERT
-CREATE OR REPLACE FUNCTION trigger_outbox_worker_on_insert()
+-- 2. Function: Outbox Worker HTTP Dispatcher (pg_net)
+-- Reads hub_url and admin_api_key from payment_hub_config and dispatches HTTP POST
+CREATE OR REPLACE FUNCTION public.trigger_outbox_worker_on_insert()
 RETURNS TRIGGER AS $$
 DECLARE
     target_urls_raw TEXT;
     single_url TEXT;
     auth_key TEXT;
 BEGIN
-    SELECT "value" INTO target_urls_raw FROM "payment_hub_config" WHERE "key" = 'hub_url';
-    SELECT "value" INTO auth_key FROM "payment_hub_config" WHERE "key" = 'admin_api_key';
+    SELECT "value" INTO target_urls_raw FROM public.payment_hub_config WHERE "key" = 'hub_url';
+    SELECT "value" INTO auth_key FROM public.payment_hub_config WHERE "key" = 'admin_api_key';
 
     IF target_urls_raw IS NOT NULL AND length(trim(target_urls_raw)) > 0 THEN
-        -- Loop through every comma-separated URL (e.g. localhost:3000, localhost:3002, Netlify)
+        -- Loop through every comma-separated URL (e.g. localhost:3000, localhost:3002, production)
         FOREACH single_url IN ARRAY regexp_split_to_array(target_urls_raw, '[,\s]+') LOOP
             single_url := trim(single_url);
             IF length(single_url) > 0 THEN
@@ -56,24 +48,16 @@ EXCEPTION
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- 4. Attach Trigger to webhook_outbox_queue
-DROP TRIGGER IF EXISTS trg_outbox_worker_on_insert ON "webhook_outbox_queue";
-CREATE TRIGGER trg_outbox_worker_on_insert
-AFTER INSERT ON "webhook_outbox_queue"
-FOR EACH ROW
-WHEN (NEW.status = 'PENDING')
-EXECUTE FUNCTION trigger_outbox_worker_on_insert();
-
--- 5. Helper Function for Scheduled Outbox Processing (pg_cron)
-CREATE OR REPLACE FUNCTION invoke_outbox_worker_cron()
+-- 3. Function: Scheduled Outbox Worker Invocation
+CREATE OR REPLACE FUNCTION public.invoke_outbox_worker_cron()
 RETURNS void AS $$
 DECLARE
     target_urls_raw TEXT;
     single_url TEXT;
     auth_key TEXT;
 BEGIN
-    SELECT "value" INTO target_urls_raw FROM "payment_hub_config" WHERE "key" = 'hub_url';
-    SELECT "value" INTO auth_key FROM "payment_hub_config" WHERE "key" = 'admin_api_key';
+    SELECT "value" INTO target_urls_raw FROM public.payment_hub_config WHERE "key" = 'hub_url';
+    SELECT "value" INTO auth_key FROM public.payment_hub_config WHERE "key" = 'admin_api_key';
 
     IF target_urls_raw IS NOT NULL AND length(trim(target_urls_raw)) > 0 THEN
         FOREACH single_url IN ARRAY regexp_split_to_array(target_urls_raw, '[,\s]+') LOOP
@@ -101,21 +85,20 @@ EXCEPTION
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- 6. Fallback Cron Schedule: Runs every 2 minutes
-DO $$
+-- 4. Function: Stale Order Auto-Expiry in Database
+-- Automatically transitions any unpaid ACTIVE order older than 20 minutes to EXPIRED
+CREATE OR REPLACE FUNCTION public.auto_expire_stale_orders(p_max_age_minutes INTEGER DEFAULT 20)
+RETURNS INTEGER AS $$
+DECLARE
+    v_updated_count INTEGER := 0;
 BEGIN
-    IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_cron') THEN
-        PERFORM cron.unschedule(jobid) 
-        FROM cron.job 
-        WHERE jobname = 'payment-hub-outbox-worker-cron';
+    UPDATE public.orders
+    SET "orderStatus" = 'EXPIRED'::public."OrderStatus",
+        "updatedAt" = CURRENT_TIMESTAMP
+    WHERE "orderStatus" = 'ACTIVE'::public."OrderStatus"
+      AND "createdAt" < (CURRENT_TIMESTAMP - (p_max_age_minutes || ' minutes')::interval);
 
-        PERFORM cron.schedule(
-            'payment-hub-outbox-worker-cron',
-            '*/2 * * * *',
-            'SELECT invoke_outbox_worker_cron();'
-        );
-    END IF;
-EXCEPTION
-    WHEN OTHERS THEN
-        RAISE WARNING 'pg_cron setup warning: %', SQLERRM;
-END $$;
+    GET DIAGNOSTICS v_updated_count = ROW_COUNT;
+    RETURN v_updated_count;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;

@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 
 export function createClient() {
   const cookieStore = cookies();
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://etixgqrvyrmoxcdpmjxb.supabase.co";
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
   const publishableKey =
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
