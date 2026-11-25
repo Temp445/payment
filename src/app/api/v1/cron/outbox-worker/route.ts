@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { OutboxWorker } from "@/lib/outboxWorker";
+import { OrderService } from "@/services/order.service";
 import { verifyAdminAuth } from "@/lib/auth";
 import { getCachedAdminApiKey } from "@/lib/config";
 
@@ -24,7 +25,16 @@ async function handleOutboxProcess(req: NextRequest) {
     return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
   }
 
-  const result = await OutboxWorker.processBatch(25);
-  return NextResponse.json({ success: true, ...result });
+  // 1. Process pending outbox webhook dispatches
+  const outboxResult = await OutboxWorker.processBatch(25);
+
+  // 2. Automatically expire stale ACTIVE orders older than 20 minutes in the background
+  const expiredCount = await OrderService.autoExpireStaleOrders(20);
+
+  return NextResponse.json({
+    success: true,
+    ...outboxResult,
+    autoExpiredOrders: expiredCount,
+  });
 }
 

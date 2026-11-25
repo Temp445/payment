@@ -184,6 +184,26 @@ export function getOrderDisplayStatus(order: any): {
     };
   }
 
+  // Auto-detect expired orders: If status is still ACTIVE but older than 20 minutes with no successful payments
+  if (order.orderStatus === "ACTIVE" && order.createdAt) {
+    const createdTime = new Date(order.createdAt).getTime();
+    const twentyMinutesAgo = Date.now() - 20 * 60 * 1000;
+    const hasSuccessfulPayment = (order.payments || []).some(
+      (p: any) => p.paymentStatus === "SUCCESS"
+    );
+
+    if (createdTime < twentyMinutesAgo && !hasSuccessfulPayment) {
+      return {
+        status: "EXPIRED",
+        badgeStatus: "EXPIRED",
+        label: "EXPIRED",
+        isPendingRefund: false,
+        isFullyRefunded: false,
+        isPartiallyRefunded: false,
+      };
+    }
+  }
+
   return {
     status: order.orderStatus,
     badgeStatus: order.orderStatus,
