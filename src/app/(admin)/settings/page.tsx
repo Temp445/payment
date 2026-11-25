@@ -711,9 +711,6 @@ export default function SettingsPage() {
                   <strong>Instant Environment Switching</strong>: Toggle between <strong>TEST / Sandbox</strong> and <strong>PRODUCTION / Live</strong> without editing code or restarting servers.
                 </li>
                 <li>
-                  <strong>Database Overrides .env</strong>: Any credentials saved here take immediate priority over <code className="text-slate-300">.env</code>. If fields are left empty, the system automatically falls back to your environment variables.
-                </li>
-                <li>
                   <strong>Automatic Request Origin</strong>: When creating checkout sessions, the Payment Hub dynamically binds to whichever port or domain received the order (e.g. <code className="text-slate-300">3000</code> or <code className="text-slate-300">3002</code>).
                 </li>
               </ul>
