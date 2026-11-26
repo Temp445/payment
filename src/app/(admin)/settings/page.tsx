@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { Suspense, useState, useEffect } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Header } from "@/components/layout/Header";
@@ -26,7 +26,7 @@ import {
   Mail,
 } from "lucide-react";
 
-export default function SettingsPage() {
+function SettingsContent() {
   const searchParams = useSearchParams();
   const initialTab = searchParams.get("tab") === "email" ? "email" : "gateway";
   const [activeTab, setActiveTab] = useState<"gateway" | "email">(initialTab);
@@ -719,5 +719,13 @@ export default function SettingsPage() {
         )}
       </div>
     </>
+  );
+}
+
+export default function SettingsPage() {
+  return (
+    <Suspense fallback={<Header title="Gateway & System Settings" />}>
+      <SettingsContent />
+    </Suspense>
   );
 }
