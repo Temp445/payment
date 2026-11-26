@@ -47,8 +47,11 @@ CREATE TABLE IF NOT EXISTS public.applications (
   "displayName" text null,
   "logoUrl" text null,
   "brandColor" text null,
+  environment text not null default 'INHERIT'::text,
   constraint applications_pkey primary key (id)
 ) TABLESPACE pg_default;
+
+ALTER TABLE public.applications ADD COLUMN IF NOT EXISTS environment text not null default 'INHERIT'::text;
 
 CREATE UNIQUE INDEX IF NOT EXISTS "applications_appCode_key" on public.applications using btree ("appCode") TABLESPACE pg_default;
 CREATE UNIQUE INDEX IF NOT EXISTS "applications_clientId_key" on public.applications using btree ("clientId") TABLESPACE pg_default;
