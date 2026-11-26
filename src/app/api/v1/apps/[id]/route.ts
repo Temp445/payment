@@ -26,6 +26,7 @@ const updateAppSchema = z.object({
     .optional()
     .or(z.literal("")),
   webhookUrl: z.string().url().nullable().optional(),
+  environment: z.enum(["INHERIT", "TEST", "PRODUCTION"]).optional(),
   isActive: z.boolean().optional(),
   regenerateSecret: z.boolean().optional(),
   regenerateWebhookSecret: z.boolean().optional(),
@@ -93,6 +94,7 @@ export async function PATCH(
     const {
       appName,
       webhookUrl,
+      environment,
       isActive,
       regenerateSecret,
       regenerateWebhookSecret,
@@ -118,6 +120,10 @@ export async function PATCH(
 
     if (webhookUrl !== undefined) {
       dataToUpdate.webhookUrl = webhookUrl;
+    }
+
+    if (environment !== undefined) {
+      dataToUpdate.environment = environment;
     }
 
     if (isActive !== undefined) {
@@ -169,6 +175,7 @@ export async function PATCH(
         clientId: updatedApp.clientId,
         webhookUrl: updatedApp.webhookUrl,
         webhookSecret: updatedApp.webhookSecret,
+        environment: updatedApp.environment,
         isActive: updatedApp.isActive,
         clientSecret: newRawClientSecret, // Returned only if regenerated
       },

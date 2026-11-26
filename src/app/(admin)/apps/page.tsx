@@ -36,12 +36,14 @@ export default function ApplicationsPage() {
   const [appCode, setAppCode] = useState("");
   const [appName, setAppName] = useState("");
   const [webhookUrl, setWebhookUrl] = useState("");
+  const [environment, setEnvironment] = useState<"INHERIT" | "TEST" | "PRODUCTION">("INHERIT");
   const [newCredentials, setNewCredentials] = useState<any | null>(null);
 
   // Edit Modal states
   const [editApp, setEditApp] = useState<any | null>(null);
   const [editAppName, setEditAppName] = useState("");
   const [editWebhookUrl, setEditWebhookUrl] = useState("");
+  const [editEnvironment, setEditEnvironment] = useState<"INHERIT" | "TEST" | "PRODUCTION">("INHERIT");
   const [editDisplayName, setEditDisplayName] = useState("");
   const [editLogoUrl, setEditLogoUrl] = useState("");
   const [editBrandColor, setEditBrandColor] = useState("");
@@ -89,6 +91,7 @@ export default function ApplicationsPage() {
           appCode: appCode.trim().toUpperCase().replace(/\s+/g, "_"),
           appName: appName.trim(),
           webhookUrl: webhookUrl.trim() || undefined,
+          environment,
         }),
       });
       const data = await res.json();
@@ -98,6 +101,7 @@ export default function ApplicationsPage() {
         setAppCode("");
         setAppName("");
         setWebhookUrl("");
+        setEnvironment("INHERIT");
       } else {
         const detailMsg = data.details?.fieldErrors
           ? Object.entries(data.details.fieldErrors)
@@ -134,6 +138,9 @@ export default function ApplicationsPage() {
     setEditApp(app);
     setEditAppName(app.appName);
     setEditWebhookUrl(app.webhookUrl || "");
+    setEditEnvironment(
+      app.environment === "PRODUCTION" || app.environment === "TEST" ? app.environment : "INHERIT"
+    );
     setEditDisplayName(app.displayName || "");
     setEditLogoUrl(app.logoUrl || "");
     setEditBrandColor(app.brandColor || "");
@@ -161,6 +168,7 @@ export default function ApplicationsPage() {
           logoUrl: editLogoUrl.trim() || null,
           brandColor: editBrandColor || null,
           webhookUrl: editWebhookUrl ? editWebhookUrl.trim() : null,
+          environment: editEnvironment,
           isActive: editIsActive,
           regenerateSecret: editRegenerateSecret,
           regenerateWebhookSecret: editRegenerateWebhookSecret,
@@ -325,6 +333,21 @@ export default function ApplicationsPage() {
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
+                  <Badge
+                    variant={
+                      app.environment === "PRODUCTION"
+                        ? "success"
+                        : app.environment === "TEST"
+                        ? "warning"
+                        : "neutral"
+                    }
+                  >
+                    {app.environment === "PRODUCTION"
+                      ? "LIVE"
+                      : app.environment === "TEST"
+                      ? "TEST"
+                      : "GLOBAL"}
+                  </Badge>
                   <Badge variant={app.isActive ? "success" : "neutral"}>
                     {app.isActive ? "Active" : "Inactive"}
                   </Badge>
@@ -540,6 +563,21 @@ export default function ApplicationsPage() {
                   />
                 </div>
 
+                <div>
+                  <label className="block text-[var(--muted-foreground)] mb-1">
+                    Gateway Mode
+                  </label>
+                  <select
+                    value={environment}
+                    onChange={(e) => setEnvironment(e.target.value as "INHERIT" | "TEST" | "PRODUCTION")}
+                    className="w-full px-3 py-2 rounded-lg bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)] focus:outline-none focus:border-blue-500 cursor-pointer"
+                  >
+                    <option value="INHERIT">Inherit Global Settings</option>
+                    <option value="TEST">TEST / Sandbox (Isolated)</option>
+                    <option value="PRODUCTION">PRODUCTION / Live</option>
+                  </select>
+                </div>
+
                 <div className="pt-2 flex justify-end gap-2">
                   <button
                     type="button"
@@ -565,9 +603,9 @@ export default function ApplicationsPage() {
       {/* MODAL 2: EDIT APPLICATION */}
       {/* ========================================================================= */}
       {editApp && (
-        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
-          <div className="w-full max-w-lg rounded-2xl bg-[var(--card)] border border-[var(--border)] p-6 shadow-xl space-y-5">
-            <div className="flex items-center justify-between">
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
+          <div className="w-full max-w-2xl max-h-[90vh] flex flex-col rounded-2xl bg-[var(--card)] border border-[var(--border)] shadow-xl overflow-hidden">
+            <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-[var(--border)] shrink-0">
               <div>
                 <h3 className="font-bold text-sm text-[var(--foreground)] flex items-center gap-2">
                   <Pencil className="w-4 h-4 text-blue-400" />
@@ -578,15 +616,17 @@ export default function ApplicationsPage() {
                 </p>
               </div>
               <button
+                type="button"
                 onClick={() => setEditApp(null)}
-                className="text-xs text-[var(--muted-foreground)] hover:text-white"
+                className="p-1.5 rounded-lg text-xs text-[var(--muted-foreground)] hover:text-white hover:bg-slate-800 transition"
+                aria-label="Close modal"
               >
                 ✕
               </button>
             </div>
 
             {editCredentialsResult ? (
-              <div className="space-y-4">
+              <div className="p-4 sm:p-6 space-y-4 overflow-y-auto">
                 <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs text-amber-300 space-y-1">
                   <p className="font-bold">⚠️ New Credentials Generated!</p>
                   <p>Save these credentials now. Any client or backend services using old keys must be updated.</p>
@@ -626,33 +666,35 @@ export default function ApplicationsPage() {
                 </button>
               </div>
             ) : (
-              <form onSubmit={handleUpdateApp} className="space-y-4 text-xs">
-                {/* App Code (Read-Only) */}
-                <div>
-                  <label className="block text-[var(--muted-foreground)] mb-1">
-                    App Code (Namespace identifier - permanent)
-                  </label>
-                  <input
-                    type="text"
-                    disabled
-                    value={editApp.appCode}
-                    className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-[var(--border)] text-slate-400 font-mono cursor-not-allowed"
-                  />
-                </div>
+              <form onSubmit={handleUpdateApp} className="flex flex-col flex-1 min-h-0">
+                <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 space-y-4 text-xs">
+                  {/* App Code & App Name */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    <div>
+                      <label className="block text-[var(--muted-foreground)] mb-1">
+                        App Code (Permanent)
+                      </label>
+                      <input
+                        type="text"
+                        disabled
+                        value={editApp.appCode}
+                        className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-[var(--border)] text-slate-400 font-mono cursor-not-allowed"
+                      />
+                    </div>
 
-                {/* App Name */}
-                <div>
-                  <label className="block text-[var(--muted-foreground)] mb-1 font-medium">
-                    Application Name
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={editAppName}
-                    onChange={(e) => setEditAppName(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)] focus:outline-none focus:border-blue-500"
-                  />
-                </div>
+                    <div>
+                      <label className="block text-[var(--muted-foreground)] mb-1 font-medium">
+                        Application Name
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={editAppName}
+                        onChange={(e) => setEditAppName(e.target.value)}
+                        className="w-full px-3 py-2 rounded-lg bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)] focus:outline-none focus:border-blue-500"
+                      />
+                    </div>
+                  </div>
 
                 {/* Webhook URL */}
                 <div>
@@ -668,6 +710,25 @@ export default function ApplicationsPage() {
                   />
                   <p className="text-[10px] text-[var(--muted-foreground)] mt-1">
                     Payment Hub will dispatch signed HMAC-SHA256 events to this address when orders are paid.
+                  </p>
+                </div>
+
+                {/* Gateway Mode */}
+                <div>
+                  <label className="block text-[var(--muted-foreground)] mb-1 font-medium">
+                    Gateway Mode
+                  </label>
+                  <select
+                    value={editEnvironment}
+                    onChange={(e) => setEditEnvironment(e.target.value as "INHERIT" | "TEST" | "PRODUCTION")}
+                    className="w-full px-3 py-2 rounded-lg bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)] focus:outline-none focus:border-blue-500 cursor-pointer"
+                  >
+                    <option value="INHERIT">Inherit Global Settings</option>
+                    <option value="TEST">TEST / Sandbox (Isolated)</option>
+                    <option value="PRODUCTION">PRODUCTION / Live</option>
+                  </select>
+                  <p className="text-[10px] text-[var(--muted-foreground)] mt-1">
+                    Override the global TEST/PRODUCTION setting for this specific application.
                   </p>
                 </div>
 
@@ -822,19 +883,20 @@ export default function ApplicationsPage() {
                     <span className="text-slate-300">Regenerate Webhook Secret (whsec_...)</span>
                   </label>
                 </div>
+                </div>
 
-                <div className="pt-2 flex justify-end gap-2">
+                <div className="px-4 sm:px-6 py-3.5 border-t border-[var(--border)] bg-[var(--card)] flex flex-col-reverse sm:flex-row sm:justify-end gap-2 shrink-0 text-xs">
                   <button
                     type="button"
                     onClick={() => setEditApp(null)}
-                    className="px-3 py-2 rounded-lg border border-[var(--border)] text-[var(--muted-foreground)] hover:text-white"
+                    className="w-full sm:w-auto px-4 py-2 rounded-lg border border-[var(--border)] text-[var(--muted-foreground)] hover:text-white transition"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={editSubmitting}
-                    className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold transition"
+                    className="w-full sm:w-auto px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold transition disabled:opacity-50"
                   >
                     {editSubmitting ? "Saving..." : "Save Changes"}
                   </button>

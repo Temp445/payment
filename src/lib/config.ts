@@ -655,6 +655,29 @@ export function getCachedCashfreeConfig(): {
 }
 
 /**
+ * Resolve whether an application should use Production (true) or Sandbox (false).
+ * Falls back to the global Settings environment when appEnv is "INHERIT" or unset.
+ */
+export function resolveAppCashfreeEnv(appEnv?: string | null): boolean {
+  const normalized = (appEnv || "INHERIT").trim().toUpperCase();
+  if (normalized === "PRODUCTION") return true;
+  if (normalized === "TEST" || normalized === "SANDBOX") return false;
+  return getCachedCashfreeConfig().isProd;
+}
+
+/**
+ * Return Cashfree credentials and base URL for a specific mode (concurrency-safe).
+ */
+export function getCashfreeCredentialsForMode(isProdOverride?: boolean) {
+  const cfg = getCachedCashfreeConfig();
+  const isProd = isProdOverride !== undefined ? isProdOverride : cfg.isProd;
+  const appId = isProd ? (cfg.prodAppId || cfg.testAppId) : (cfg.testAppId || cfg.prodAppId);
+  const secretKey = isProd ? (cfg.prodSecretKey || cfg.testSecretKey) : (cfg.testSecretKey || cfg.prodSecretKey);
+  const baseUrl = isProd ? "https://api.cashfree.com/pg" : "https://sandbox.cashfree.com/pg";
+  return { appId, secretKey, isProd, baseUrl, apiVersion: cfg.apiVersion };
+}
+
+/**
  * Synchronous getter. If a preferredOrigin is passed (e.g. from current request),
  * it returns that origin if it matches one of the configured URLs, otherwise returns primary.
  */

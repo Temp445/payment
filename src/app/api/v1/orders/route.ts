@@ -3,7 +3,7 @@ import { authenticateApplication } from "@/lib/auth";
 import { OrderService } from "@/services/order.service";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { ensureHubConfigLoaded } from "@/lib/config";
+import { ensureHubConfigLoaded, resolveAppCashfreeEnv } from "@/lib/config";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -99,8 +99,9 @@ export async function GET(req: NextRequest) {
           { status: 401, headers: corsHeaders }
         );
       }
+      const isProd = resolveAppCashfreeEnv(warmApp.environment);
       return NextResponse.json(
-        { success: true, mode: cfg.cashfreeEnv === "PRODUCTION" ? "production" : "sandbox" },
+        { success: true, mode: isProd ? "production" : "sandbox" },
         { headers: { ...corsHeaders, "Cache-Control": "no-store" } }
       );
     }

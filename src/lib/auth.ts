@@ -9,6 +9,7 @@ export interface AuthenticatedApp {
   appName: string;
   webhookUrl: string | null;
   webhookSecret: string;
+  environment: string;
   isPublicClient?: boolean;
 }
 
@@ -56,6 +57,7 @@ export async function authenticateApplication(
         clientSecretHash: true,
         webhookUrl: true,
         webhookSecret: true,
+        environment: true,
         isActive: true,
       },
     });
@@ -78,6 +80,7 @@ export async function authenticateApplication(
       appName: app.appName,
       webhookUrl: app.webhookUrl,
       webhookSecret: app.webhookSecret,
+      environment: app.environment || "INHERIT",
       isPublicClient,
     };
 

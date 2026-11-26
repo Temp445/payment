@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { CashfreeAdapter } from "@/lib/cashfree";
 import { AuthenticatedApp } from "@/lib/auth";
 import { logger } from "@/lib/logger";
-import { getCachedCashfreeConfig, ensureHubConfigLoaded } from "@/lib/config";
+import { ensureHubConfigLoaded, resolveAppCashfreeEnv } from "@/lib/config";
 import { OutboxWorker } from "@/lib/outboxWorker";
 
 export interface CreateOrderInput {
@@ -45,7 +45,7 @@ export class OrderService {
 
     // Request Payment Session from Cashfree Adapter directly (skips upfront findUnique DB round-trip;
     // duplicate order_id is handled via P2002 fallback below)
-    const { isProd } = getCachedCashfreeConfig();
+    const isProd = resolveAppCashfreeEnv(app.environment);
     const currentMode = isProd ? "production" : "sandbox";
     const orderMetadata = {
       ...(typeof input.metadata === "object" && input.metadata !== null
@@ -66,6 +66,7 @@ export class OrderService {
       returnUrl: input.order_meta?.return_url,
       notifyUrl: input.order_meta?.notify_url || (hubOrigin ? `${hubOrigin.replace(/\/$/, "")}/api/v1/webhooks/cashfree` : undefined),
       note: input.order_note,
+      isProd,
     });
 
     const paymentSessionId = cfResponse.payment_session_id;
@@ -236,7 +237,9 @@ export class OrderService {
 
     // 3. Attempt termination on Cashfree
     if (order.cfOrderId) {
-      CashfreeAdapter.terminateOrder(order.cfOrderId).catch((err) => {
+      const orderEnv = (order.metadata as any)?.environment;
+      const isProd = orderEnv === "production" ? true : orderEnv === "sandbox" ? false : resolveAppCashfreeEnv(app.environment);
+      CashfreeAdapter.terminateOrder(order.cfOrderId, isProd).catch((err) => {
         logger.warn(`Cashfree terminateOrder error: ${err.message}`);
       });
     }
@@ -313,7 +316,9 @@ export class OrderService {
     // If order is still ACTIVE on localhost (where webhooks cannot reach), verify directly with Cashfree
     if (order.orderStatus === "ACTIVE" && order.cfOrderId) {
       try {
-        const cfPayments = await CashfreeAdapter.getOrderPayments(order.cfOrderId);
+        const orderEnv = (order.metadata as any)?.environment;
+        const isProd = orderEnv === "production" ? true : orderEnv === "sandbox" ? false : resolveAppCashfreeEnv(app.environment);
+        const cfPayments = await CashfreeAdapter.getOrderPayments(order.cfOrderId, isProd);
         if (Array.isArray(cfPayments) && cfPayments.length > 0) {
           const successPayment = cfPayments.find(
             (p: any) => p.payment_status === "SUCCESS"

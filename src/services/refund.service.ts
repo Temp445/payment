@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { CashfreeAdapter } from "@/lib/cashfree";
 import { AuthenticatedApp } from "@/lib/auth";
 import { logger } from "@/lib/logger";
+import { resolveAppCashfreeEnv } from "@/lib/config";
 
 export class RefundService {
   /**
@@ -77,11 +78,14 @@ export class RefundService {
 
     // 4. Call Cashfree Adapter
     try {
+      const orderEnv = (order.metadata as any)?.environment;
+      const isProd = orderEnv === "production" ? true : orderEnv === "sandbox" ? false : resolveAppCashfreeEnv(app.environment);
       const cfResponse = await CashfreeAdapter.createRefund({
         cfOrderId: order.cfOrderId,
         refundAmount: params.refundAmount,
         refundId: cfRefundId,
         note: params.note,
+        isProd,
       });
 
       const cfStatus = cfResponse.refund_status === "SUCCESS" ? "SUCCESS" : "PENDING";
@@ -176,7 +180,9 @@ export class RefundService {
       throw new Error(`Order ${trimmedId} not found`);
     }
 
-    const cfRefunds = await CashfreeAdapter.getOrderRefunds(order.cfOrderId);
+    const orderEnv = (order.metadata as any)?.environment;
+    const isProd = orderEnv === "production" ? true : orderEnv === "sandbox" ? false : resolveAppCashfreeEnv(order.application?.environment);
+    const cfRefunds = await CashfreeAdapter.getOrderRefunds(order.cfOrderId, isProd);
     if (!Array.isArray(cfRefunds) || cfRefunds.length === 0) {
       return {
         orderId: order.id,

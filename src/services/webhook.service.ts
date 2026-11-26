@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { CashfreeAdapter } from "@/lib/cashfree";
-import { ensureHubConfigLoaded } from "@/lib/config";
+import { ensureHubConfigLoaded, resolveAppCashfreeEnv } from "@/lib/config";
 import { canTransitionOrder } from "@/lib/stateMachine";
 import { OutboxWorker } from "@/lib/outboxWorker";
 import { logger } from "@/lib/logger";
@@ -180,7 +180,9 @@ export class WebhookService {
     // 4. Double Verification: Verify Payment Status Directly with Cashfree API
     let verifiedPaymentStatus: PaymentStatus = "PENDING";
     try {
-      const cfPaymentsList = await CashfreeAdapter.getOrderPayments(cfOrderId);
+      const orderEnv = (order.metadata as any)?.environment;
+      const isProd = orderEnv === "production" ? true : orderEnv === "sandbox" ? false : resolveAppCashfreeEnv(order.application?.environment);
+      const cfPaymentsList = await CashfreeAdapter.getOrderPayments(cfOrderId, isProd);
       const matchedPayment = Array.isArray(cfPaymentsList)
         ? cfPaymentsList.find((p: any) => String(p.cf_payment_id) === cfPaymentId)
         : null;

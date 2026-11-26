@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { OrderService } from "@/services/order.service";
-import { getCachedCashfreeConfig } from "@/lib/config";
+import { resolveAppCashfreeEnv } from "@/lib/config";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -53,6 +53,7 @@ export async function GET(
           appName: order.application.appName,
           webhookUrl: order.application.webhookUrl,
           webhookSecret: order.application.webhookSecret,
+          environment: order.application.environment,
         },
         order.appOrderId
       );
@@ -60,10 +61,12 @@ export async function GET(
     }
 
     const app = order.application;
+    const orderEnv = (order.metadata as any)?.environment;
+    const isProd = orderEnv === "production" ? true : orderEnv === "sandbox" ? false : resolveAppCashfreeEnv(app.environment);
     return NextResponse.json(
       {
         success: true,
-        mode: getCachedCashfreeConfig().isProd ? "production" : "sandbox",
+        mode: isProd ? "production" : "sandbox",
         order: {
           order_id: order.appOrderId,
           amount: Number(order.orderAmount),

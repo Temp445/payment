@@ -1,33 +1,21 @@
-import { Cashfree } from "cashfree-pg";
 import crypto from "crypto";
 import axios from "axios";
 import { logger } from "./logger";
-import { getCachedHubUrl, getCachedCashfreeConfig, ensureHubConfigLoaded } from "./config";
+import {
+  getCachedHubUrl,
+  getCachedCashfreeConfig,
+  ensureHubConfigLoaded,
+  getCashfreeCredentialsForMode,
+} from "./config";
 
 // Setup Cashfree SDK configuration dynamically from database or in-memory cache
-async function getCashfreeConfigAsync() {
+async function getCashfreeConfigAsync(isProdOverride?: boolean) {
   await ensureHubConfigLoaded();
-  const { appId, secretKey, isProd, baseUrl, apiVersion } = getCachedCashfreeConfig();
-
-  Cashfree.XClientId = appId;
-  Cashfree.XClientSecret = secretKey;
-  Cashfree.XEnvironment = isProd
-    ? Cashfree.Environment.PRODUCTION
-    : Cashfree.Environment.SANDBOX;
-
-  return { appId, secretKey, isProd, baseUrl, apiVersion };
+  return getCashfreeCredentialsForMode(isProdOverride);
 }
 
-function getCashfreeConfigSync() {
-  const { appId, secretKey, isProd, baseUrl, apiVersion } = getCachedCashfreeConfig();
-
-  Cashfree.XClientId = appId;
-  Cashfree.XClientSecret = secretKey;
-  Cashfree.XEnvironment = isProd
-    ? Cashfree.Environment.PRODUCTION
-    : Cashfree.Environment.SANDBOX;
-
-  return { appId, secretKey, isProd, baseUrl, apiVersion };
+function getCashfreeConfigSync(isProdOverride?: boolean) {
+  return getCashfreeCredentialsForMode(isProdOverride);
 }
 
 export class CashfreeAdapter {
@@ -35,12 +23,12 @@ export class CashfreeAdapter {
     return getCachedCashfreeConfig().apiVersion || "2023-08-01";
   }
 
-  private static async ensureConfigured() {
-    return getCashfreeConfigAsync();
+  private static async ensureConfigured(isProdOverride?: boolean) {
+    return getCashfreeConfigAsync(isProdOverride);
   }
 
-  private static ensureConfiguredSync() {
-    return getCashfreeConfigSync();
+  private static ensureConfiguredSync(isProdOverride?: boolean) {
+    return getCashfreeConfigSync(isProdOverride);
   }
 
   /**
@@ -59,9 +47,10 @@ export class CashfreeAdapter {
     returnUrl?: string;
     notifyUrl?: string;
     note?: string;
+    isProd?: boolean;
   }) {
     try {
-      const config = await this.ensureConfigured();
+      const config = await this.ensureConfigured(params.isProd);
       if (!config.appId || !config.secretKey) {
         throw new Error(
           "Cashfree credentials are missing. Please configure them in Settings."
@@ -91,7 +80,14 @@ export class CashfreeAdapter {
         order_note: params.note,
       };
 
-      const response = await Cashfree.PGCreateOrder(this.getApiVersion(), request);
+      const response = await axios.post(`${config.baseUrl}/orders`, request, {
+        headers: {
+          "x-client-id": config.appId,
+          "x-client-secret": config.secretKey,
+          "x-api-version": this.getApiVersion(),
+          "Content-Type": "application/json",
+        },
+      });
       return response.data;
     } catch (error: any) {
       logger.error("CashfreeAdapter.createOrder failed", error?.response?.data || error);
@@ -104,10 +100,16 @@ export class CashfreeAdapter {
   /**
    * Directly fetch payment status from Cashfree for verification
    */
-  static async getOrderPayments(cfOrderId: string) {
+  static async getOrderPayments(cfOrderId: string, isProd?: boolean) {
     try {
-      await this.ensureConfigured();
-      const response = await Cashfree.PGOrderFetchPayments(this.getApiVersion(), cfOrderId);
+      const { appId, secretKey, baseUrl } = await this.ensureConfigured(isProd);
+      const response = await axios.get(`${baseUrl}/orders/${cfOrderId}/payments`, {
+        headers: {
+          "x-client-id": appId,
+          "x-client-secret": secretKey,
+          "x-api-version": this.getApiVersion(),
+        },
+      });
       return response.data;
     } catch (error: any) {
       logger.error("CashfreeAdapter.getOrderPayments failed", error?.response?.data || error);
@@ -120,9 +122,9 @@ export class CashfreeAdapter {
   /**
    * Terminate/cancel an active order on Cashfree
    */
-  static async terminateOrder(cfOrderId: string) {
+  static async terminateOrder(cfOrderId: string, isProd?: boolean) {
     try {
-      const { appId, secretKey, baseUrl } = await this.ensureConfigured();
+      const { appId, secretKey, baseUrl } = await this.ensureConfigured(isProd);
       const response = await axios.patch(
         `${baseUrl}/orders/${cfOrderId}`,
         { order_status: "TERMINATED" },
@@ -187,19 +189,27 @@ export class CashfreeAdapter {
     refundAmount: number;
     refundId: string;
     note?: string;
+    isProd?: boolean;
   }) {
     try {
-      await this.ensureConfigured();
+      const { appId, secretKey, baseUrl } = await this.ensureConfigured(params.isProd);
       const request = {
         refund_amount: params.refundAmount,
         refund_id: params.refundId,
         refund_note: params.note || "Refund initiated from Payment Hub",
       };
 
-      const response = await Cashfree.PGOrderCreateRefund(
-        this.getApiVersion(),
-        params.cfOrderId,
-        request
+      const response = await axios.post(
+        `${baseUrl}/orders/${params.cfOrderId}/refunds`,
+        request,
+        {
+          headers: {
+            "x-client-id": appId,
+            "x-client-secret": secretKey,
+            "x-api-version": this.getApiVersion(),
+            "Content-Type": "application/json",
+          },
+        }
       );
       return response.data;
     } catch (error: any) {
@@ -213,9 +223,9 @@ export class CashfreeAdapter {
   /**
    * Fetch a specific refund from Cashfree API
    */
-  static async getOrderRefund(cfOrderId: string, cfRefundId: string) {
+  static async getOrderRefund(cfOrderId: string, cfRefundId: string, isProd?: boolean) {
     try {
-      const { baseUrl, appId, secretKey } = await this.ensureConfigured();
+      const { baseUrl, appId, secretKey } = await this.ensureConfigured(isProd);
       const response = await axios.get(
         `${baseUrl}/orders/${cfOrderId}/refunds/${cfRefundId}`,
         {
@@ -238,9 +248,9 @@ export class CashfreeAdapter {
   /**
    * Fetch all refunds for an order from Cashfree API
    */
-  static async getOrderRefunds(cfOrderId: string) {
+  static async getOrderRefunds(cfOrderId: string, isProd?: boolean) {
     try {
-      const { baseUrl, appId, secretKey } = await this.ensureConfigured();
+      const { baseUrl, appId, secretKey } = await this.ensureConfigured(isProd);
       const response = await axios.get(
         `${baseUrl}/orders/${cfOrderId}/refunds`,
         {
@@ -315,21 +325,27 @@ export class CashfreeAdapter {
     }
 
     try {
-      const { secretKey } = this.ensureConfiguredSync();
+      const cfg = getCachedCashfreeConfig();
+      const candidateKeys = Array.from(
+        new Set([cfg.secretKey, cfg.prodSecretKey, cfg.testSecretKey].filter(Boolean))
+      );
       const payload = `${timestamp}${rawBody}`;
-      const expectedSignature = crypto
-        .createHmac("sha256", secretKey)
-        .update(payload)
-        .digest("base64");
-
       const signatureBuffer = Buffer.from(signature);
-      const expectedBuffer = Buffer.from(expectedSignature);
 
-      if (signatureBuffer.length !== expectedBuffer.length) {
-        return false;
+      for (const secretKey of candidateKeys) {
+        const expectedSignature = crypto
+          .createHmac("sha256", secretKey)
+          .update(payload)
+          .digest("base64");
+        const expectedBuffer = Buffer.from(expectedSignature);
+        if (
+          signatureBuffer.length === expectedBuffer.length &&
+          crypto.timingSafeEqual(signatureBuffer, expectedBuffer)
+        ) {
+          return true;
+        }
       }
-
-      return crypto.timingSafeEqual(signatureBuffer, expectedBuffer);
+      return false;
     } catch (err) {
       logger.error("Error verifying webhook signature", err);
       return false;

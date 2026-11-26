@@ -25,6 +25,7 @@ const createAppSchema = z.object({
     .optional()
     .or(z.literal(""))
     .nullable(),
+  environment: z.enum(["INHERIT", "TEST", "PRODUCTION"]).optional(),
 });
 
 export async function GET(req: NextRequest) {
@@ -97,7 +98,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { appCode, appName, webhookUrl } = validation.data;
+    const { appCode, appName, webhookUrl, environment } = validation.data;
 
     // Generate credentials
     const clientId = `pub_live_${appCode.toLowerCase()}_${crypto.randomBytes(4).toString("hex")}`;
@@ -113,6 +114,7 @@ export async function POST(req: NextRequest) {
         clientSecretHash,
         webhookUrl: webhookUrl || null,
         webhookSecret,
+        environment: environment || "INHERIT",
         isActive: true,
       },
     });
