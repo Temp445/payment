@@ -22,7 +22,10 @@ interface HubConfigCache {
   lastFetched: number;
 }
 
-const CACHE_TTL_MS = 30 * 1000; // 30-second in-memory cache
+// 2-minute in-memory cache. saveHubConfig() refreshes the cache immediately on the instance
+// that saved; other warm serverless instances pick up changes within this window.
+// (Was 30s, which made nearly every order request pay an extra cross-region DB query.)
+const CACHE_TTL_MS = 2 * 60 * 1000;
 
 let cachedConfig: HubConfigCache = {
   hubUrl: "",

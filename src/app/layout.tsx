@@ -20,6 +20,8 @@ export default function RootLayout({
         <link rel="preconnect" href="https://payments.cashfree.com" crossOrigin="anonymous" />
         <link rel="preconnect" href="https://api.cashfree.com" crossOrigin="anonymous" />
         <link rel="preconnect" href="https://sandbox.cashfree.com" crossOrigin="anonymous" />
+        <link rel="preconnect" href="https://payments-test.cashfree.com" crossOrigin="anonymous" />
+        <link rel="preconnect" href="https://js.sentry-cdn.com" crossOrigin="anonymous" />
         <link rel="dns-prefetch" href="https://sdk.cashfree.com" />
         <link rel="dns-prefetch" href="https://payments.cashfree.com" />
         <link rel="dns-prefetch" href="https://api.cashfree.com" />

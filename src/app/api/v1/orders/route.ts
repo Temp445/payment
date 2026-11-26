@@ -3,11 +3,14 @@ import { authenticateApplication } from "@/lib/auth";
 import { OrderService } from "@/services/order.service";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { ensureHubConfigLoaded } from "@/lib/config";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, x-client-id, x-client-secret, Authorization",
+  // Cache the CORS preflight for 24h so browsers skip the OPTIONS round-trip on every order
+  "Access-Control-Max-Age": "86400",
 };
 
 export async function OPTIONS() {
@@ -42,8 +45,12 @@ export async function POST(req: NextRequest) {
     const clientId = req.headers.get("x-client-id");
     const clientSecret = req.headers.get("x-client-secret");
 
-    // Authenticates both server apps (with secret) and pure React browser apps (with client-id)
-    const app = await authenticateApplication(clientId, clientSecret);
+    // Authenticates both server apps (with secret) and pure React browser apps (with client-id).
+    // Hub config is loaded in parallel so it is already hot when createOrder runs.
+    const [app] = await Promise.all([
+      authenticateApplication(clientId, clientSecret),
+      ensureHubConfigLoaded(),
+    ]);
     if (!app) {
       return NextResponse.json(
         { success: false, error: "Unauthorized: Invalid or inactive client ID" },
@@ -78,6 +85,25 @@ export async function GET(req: NextRequest) {
   try {
     const clientId = req.headers.get("x-client-id");
     const clientSecret = req.headers.get("x-client-secret");
+
+    // Lightweight warm-up: wakes THIS function (Prisma + config + app-auth cache) and tells the
+    // browser which Cashfree mode to pre-initialise. Creates no order. Public client-id is enough.
+    if (req.nextUrl.searchParams.get("warmup") === "1") {
+      const [warmApp, cfg] = await Promise.all([
+        authenticateApplication(clientId, null),
+        ensureHubConfigLoaded(),
+      ]);
+      if (!warmApp) {
+        return NextResponse.json(
+          { success: false, error: "Unauthorized: Invalid or inactive client ID" },
+          { status: 401, headers: corsHeaders }
+        );
+      }
+      return NextResponse.json(
+        { success: true, mode: cfg.cashfreeEnv === "PRODUCTION" ? "production" : "sandbox" },
+        { headers: { ...corsHeaders, "Cache-Control": "no-store" } }
+      );
+    }
 
     const app = await authenticateApplication(clientId, clientSecret);
     if (!app || app.isPublicClient) {
