@@ -345,6 +345,19 @@ export function OrderDetailDrawer({
           </div>
         </div>
 
+        {/* Order Metadata */}
+        {order.metadata && typeof order.metadata === "object" && Object.keys(order.metadata).length > 0 && (
+          <div className="space-y-2">
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] flex items-center gap-2">
+              <FileJson className="w-3.5 h-3.5 text-emerald-400" />
+              Order Metadata
+            </h4>
+            <pre className="p-3 rounded-lg bg-[var(--background)] border border-[var(--border)] text-[11px] font-mono text-[var(--foreground)] overflow-x-auto max-h-48">
+              {JSON.stringify(order.metadata, null, 2)}
+            </pre>
+          </div>
+        )}
+
         {/* Raw Webhook Payload */}
         {payment?.rawWebhookPayload && (
           <div className="space-y-2">
