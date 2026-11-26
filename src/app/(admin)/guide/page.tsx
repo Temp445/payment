@@ -1546,12 +1546,30 @@ export default function GuidePage() {
                       filePath="src/hooks/usePaymentHub.ts"
                       code={`"use client";
 
-import { useState } from "react";
-import { load } from "@cashfreepayments/cashfree-js";
+import { useEffect, useState } from "react";
+import { load, type CashfreeInstance, type CashfreeSDKMode } from "@cashfreepayments/cashfree-js";
+
+const cfCache = new Map<CashfreeSDKMode, Promise<CashfreeInstance>>();
+let hubMode: CashfreeSDKMode | null = null;
+const getSdk = (m: CashfreeSDKMode) => cfCache.get(m) ?? cfCache.set(m, load({ mode: m })).get(m)!;
 
 export function usePaymentHub() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const hubUrl = import.meta.env.VITE_PAYMENT_HUB_URL || "https://acepaymenthub.netlify.app/api/v1";
+  const clientId = import.meta.env.VITE_PAYMENT_HUB_CLIENT_ID;
+
+  useEffect(() => {
+    if (!clientId) return;
+    fetch(\`\${hubUrl}/orders?warmup=1\`, { headers: { "x-client-id": clientId } })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        hubMode = d?.mode === "production" ? "production" : "sandbox";
+        return getSdk(hubMode);
+      })
+      .catch(() => {});
+  }, [hubUrl, clientId]);
 
   const pay = async (params: {
     amount: number;
@@ -1566,10 +1584,9 @@ export function usePaymentHub() {
     setLoading(true);
     setError(null);
 
-    const hubUrl = import.meta.env.VITE_PAYMENT_HUB_URL || "https://acepaymenthub.netlify.app/api/v1";
-    const clientId = import.meta.env.VITE_PAYMENT_HUB_CLIENT_ID;
-
     try {
+      const sdkPromise = getSdk(hubMode ?? "sandbox");
+
       // 1. Create Order in Central Payment Hub
       const res = await fetch(\`\${hubUrl}/orders\`, {
         method: "POST",
@@ -1593,8 +1610,9 @@ export function usePaymentHub() {
         throw new Error(data.error || "Order creation failed");
       }
 
-      // 2. Mount Cashfree Drop-in Modal
-      const cashfree = await load({ mode: "sandbox" });
+      // 2. Mount Cashfree Drop-in Modal using mode returned by Payment Hub
+      const mode: CashfreeSDKMode = (data.mode || data.environment) === "production" ? "production" : "sandbox";
+      const cashfree = mode === hubMode ? await sdkPromise : await getSdk(mode);
       const result = await cashfree.checkout({
         paymentSessionId: data.payment_session_id,
         redirectTarget: "_modal",
@@ -1756,12 +1774,30 @@ export async function hasProAccess(orgId: string): Promise<boolean> {
                   filePath="src/hooks/usePaymentHub.ts"
                   code={`"use client";
 
-import { useState } from "react";
-import { load } from "@cashfreepayments/cashfree-js";
+import { useEffect, useState } from "react";
+import { load, type CashfreeInstance, type CashfreeSDKMode } from "@cashfreepayments/cashfree-js";
+
+const cfCache = new Map<CashfreeSDKMode, Promise<CashfreeInstance>>();
+let hubMode: CashfreeSDKMode | null = null;
+const getSdk = (m: CashfreeSDKMode) => cfCache.get(m) ?? cfCache.set(m, load({ mode: m })).get(m)!;
 
 export function usePaymentHub() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const hubUrl = import.meta.env.VITE_PAYMENT_HUB_URL || "https://acepaymenthub.netlify.app/api/v1";
+  const clientId = import.meta.env.VITE_PAYMENT_HUB_CLIENT_ID;
+
+  useEffect(() => {
+    if (!clientId) return;
+    fetch(\`\${hubUrl}/orders?warmup=1\`, { headers: { "x-client-id": clientId } })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        hubMode = d?.mode === "production" ? "production" : "sandbox";
+        return getSdk(hubMode);
+      })
+      .catch(() => {});
+  }, [hubUrl, clientId]);
 
   const pay = async (params: {
     amount: number;
@@ -1775,10 +1811,9 @@ export function usePaymentHub() {
     setLoading(true);
     setError(null);
 
-    const hubUrl = import.meta.env.VITE_PAYMENT_HUB_URL || "https://acepaymenthub.netlify.app/api/v1";
-    const clientId = import.meta.env.VITE_PAYMENT_HUB_CLIENT_ID;
-
     try {
+      const sdkPromise = getSdk(hubMode ?? "sandbox");
+
       // 1. Create Order
       const res = await fetch(\`\${hubUrl}/orders\`, {
         method: "POST",
@@ -1788,8 +1823,9 @@ export function usePaymentHub() {
       const data = await res.json();
       if (!res.ok || !data.payment_session_id) throw new Error(data.error || "Order creation failed");
 
-      // 2. Launch Cashfree Drop-in Modal
-      const cashfree = await load({ mode: "sandbox" });
+      // 2. Launch Cashfree Drop-in Modal using mode returned by Payment Hub
+      const mode: CashfreeSDKMode = (data.mode || data.environment) === "production" ? "production" : "sandbox";
+      const cashfree = mode === hubMode ? await sdkPromise : await getSdk(mode);
       const result = await cashfree.checkout({
         paymentSessionId: data.payment_session_id,
         redirectTarget: "_modal",
@@ -1908,12 +1944,30 @@ export function CheckoutButton({ amount = 5000 }: { amount?: number }) {
                     filePath="hooks/usePaymentHub.ts"
                     code={`"use client";
 
-import { useState } from "react";
-import { load } from "@cashfreepayments/cashfree-js";
+import { useEffect, useState } from "react";
+import { load, type CashfreeInstance, type CashfreeSDKMode } from "@cashfreepayments/cashfree-js";
+
+const cfCache = new Map<CashfreeSDKMode, Promise<CashfreeInstance>>();
+let hubMode: CashfreeSDKMode | null = null;
+const getSdk = (m: CashfreeSDKMode) => cfCache.get(m) ?? cfCache.set(m, load({ mode: m })).get(m)!;
 
 export function usePaymentHub() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const hubUrl = process.env.NEXT_PUBLIC_PAYMENT_HUB_URL || "https://acepaymenthub.netlify.app/api/v1";
+  const clientId = process.env.NEXT_PUBLIC_PAYMENT_HUB_CLIENT_ID;
+
+  useEffect(() => {
+    if (!clientId) return;
+    fetch(\`\${hubUrl}/orders?warmup=1\`, { headers: { "x-client-id": clientId } })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        hubMode = d?.mode === "production" ? "production" : "sandbox";
+        return getSdk(hubMode);
+      })
+      .catch(() => {});
+  }, [hubUrl, clientId]);
 
   const pay = async (params: {
     amount: number;
@@ -1928,10 +1982,9 @@ export function usePaymentHub() {
     setLoading(true);
     setError(null);
 
-    const hubUrl = process.env.NEXT_PUBLIC_PAYMENT_HUB_URL || "https://acepaymenthub.netlify.app/api/v1";
-    const clientId = process.env.NEXT_PUBLIC_PAYMENT_HUB_CLIENT_ID;
-
     try {
+      const sdkPromise = getSdk(hubMode ?? "sandbox");
+
       const res = await fetch(\`\${hubUrl}/orders\`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-client-id": clientId! },
@@ -1951,7 +2004,8 @@ export function usePaymentHub() {
       const data = await res.json();
       if (!res.ok || !data.payment_session_id) throw new Error(data.error || "Order creation failed");
 
-      const cashfree = await load({ mode: "sandbox" });
+      const mode: CashfreeSDKMode = (data.mode || data.environment) === "production" ? "production" : "sandbox";
+      const cashfree = mode === hubMode ? await sdkPromise : await getSdk(mode);
       const result = await cashfree.checkout({
         paymentSessionId: data.payment_session_id,
         redirectTarget: "_modal",
@@ -2239,7 +2293,13 @@ x-client-id: pub_live_payroll_d42a8b9e...
                     <tr>
                       <td className="p-3"><span className="text-emerald-400 font-bold">POST</span></td>
                       <td className="p-3 text-white">/api/v1/orders</td>
-                      <td className="p-3 font-sans text-slate-300">Create Cashfree order & return paymentSessionId</td>
+                      <td className="p-3 font-sans text-slate-300">Create Cashfree order &amp; return paymentSessionId</td>
+                      <td className="p-3 text-blue-400">x-client-id</td>
+                    </tr>
+                    <tr>
+                      <td className="p-3"><span className="text-blue-400 font-bold">GET</span></td>
+                      <td className="p-3 text-white">/api/v1/orders?warmup=1</td>
+                      <td className="p-3 font-sans text-slate-300">Warm up /orders function &amp; return active Cashfree mode</td>
                       <td className="p-3 text-blue-400">x-client-id</td>
                     </tr>
                     <tr>
@@ -2342,11 +2402,14 @@ x-client-id: pub_live_payroll_d42a8b9e...
                 <CodeBlock
                   title="HTML Head Preconnect & Prefetch Snippet"
                   language="html"
-                  code={`<!-- Cashfree Fast Preconnect & DNS Prefetch (<1-2s popup response) -->
+                  code={`<!-- Cashfree & Payment Hub Fast Preconnect & DNS Prefetch -->
+<link rel="preconnect" href="https://acepaymenthub.netlify.app" crossorigin />
 <link rel="preconnect" href="https://sdk.cashfree.com" crossorigin />
 <link rel="preconnect" href="https://payments.cashfree.com" crossorigin />
+<link rel="preconnect" href="https://payments-test.cashfree.com" crossorigin />
 <link rel="preconnect" href="https://api.cashfree.com" crossorigin />
 <link rel="preconnect" href="https://sandbox.cashfree.com" crossorigin />
+<link rel="preconnect" href="https://js.sentry-cdn.com" crossorigin />
 
 <link rel="dns-prefetch" href="https://sdk.cashfree.com" />
 <link rel="dns-prefetch" href="https://payments.cashfree.com" />
@@ -2365,30 +2428,47 @@ x-client-id: pub_live_payroll_d42a8b9e...
                     2
                   </div>
                   <h3 className="font-bold text-sm text-slate-100">
-                    Pre-initialize the SDK on Page Mount (Zero Delay on Button Click)
+                    Warm Up /orders &amp; Pre-initialize Cashfree SDK in the Exact Mode
                   </h3>
                 </div>
                 <p className="text-xs text-slate-400">
-                  Instead of awaiting SDK script downloads inside the button click handler, initialize the Cashfree SDK instance on page mount so it is warm in memory:
+                  Do <strong className="text-slate-200">not</strong> guess <code className="text-blue-300">sandbox</code> vs <code className="text-blue-300">production</code> from the <code className="text-blue-300">pub_live_</code> prefix—if the Hub is in Sandbox, guessing Production discards the pre-warmed SDK on click and triggers Cashfree&apos;s 2s <code className="text-blue-300">pingData()</code> delay. Instead, call <code className="text-emerald-300">GET /api/v1/orders?warmup=1</code> on mount to wake the serverless container and pre-load the exact mode:
                 </p>
                 <CodeBlock
-                  title="Instant Popup Execution (usePaymentHub.ts / CheckoutButton.tsx)"
+                  title="Instant Popup Execution (usePaymentHub.ts)"
                   language="typescript"
-                  code={`import { load } from "@cashfreepayments/cashfree-js";
+                  code={`import { load, type CashfreeInstance, type CashfreeSDKMode } from "@cashfreepayments/cashfree-js";
 
-// 1. Pre-warm Cashfree instance on component mount
+const sdkCache = new Map<CashfreeSDKMode, Promise<CashfreeInstance | null>>();
+let hubReportedMode: CashfreeSDKMode | null = null;
+
+function getOrLoadSdk(mode: CashfreeSDKMode) {
+  if (!sdkCache.has(mode)) {
+    sdkCache.set(mode, load({ mode }));
+  }
+  return sdkCache.get(mode)!;
+}
+
+// 1. On mount: wake the exact /orders function (0 orders created) & pre-warm the real Cashfree mode
 useEffect(() => {
-  load({ mode: "production" }); // or "sandbox"
+  fetch(\`\${hubUrl}/orders?warmup=1\`, { headers: { "x-client-id": clientId } })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((d) => {
+      hubReportedMode = d?.mode === "production" ? "production" : "sandbox";
+      return getOrLoadSdk(hubReportedMode);
+    })
+    .catch(() => {});
 }, []);
 
 // 2. When user clicks "Pay Now":
 async function handlePayClick() {
-  // A. Create order session through Central Payment Hub
-  const order = await paymentHubClient.checkout({ amount: 1500, customerPhone: "9876543210" });
-  
-  // B. Instantly launch modal in under 1 second!
-  const cashfree = await load({ mode: order.mode || "production" });
-  await cashfree.checkout({
+  const preloadedSdk = getOrLoadSdk(hubReportedMode ?? "sandbox");
+  const res = await fetch(\`\${hubUrl}/orders\`, { /* POST order payload */ });
+  const order = await res.json();
+
+  const sdkMode: CashfreeSDKMode = order.mode === "production" ? "production" : "sandbox";
+  const cashfree = sdkMode === hubReportedMode ? await preloadedSdk : await getOrLoadSdk(sdkMode);
+  await cashfree?.checkout({
     paymentSessionId: order.payment_session_id,
     redirectTarget: "_modal",
   });
@@ -2403,13 +2483,15 @@ async function handlePayClick() {
                     3
                   </div>
                   <h3 className="font-bold text-sm text-slate-100">
-                    AI Assistant Prompt (Copy & Paste to your AI Agent or Cursor)
+                    AI Assistant Prompt (Copy &amp; Paste to your AI Agent or Cursor)
                   </h3>
                 </div>
                 <CodeBlock
                   title="Prompt for Ultra-Fast Cashfree Popup"
                   language="text"
-                  code={`Optimize Cashfree checkout popup load time to under 1–2 seconds by adding DNS prefetch and preconnect tags for https://sdk.cashfree.com, https://payments.cashfree.com, and https://api.cashfree.com in index.html. Pre-load the Cashfree v3 JS SDK with defer/preload, and pre-initialize const cashfree = await load({ mode }) on page mount so that clicking the Pay button immediately opens the modal without waiting for script downloads or DNS handshakes.`}
+                  code={`Optimize Cashfree checkout popup load time by:
+1. Adding preconnect tags in index.html for https://acepaymenthub.netlify.app, https://sdk.cashfree.com, https://payments.cashfree.com, https://payments-test.cashfree.com, https://api.cashfree.com, https://sandbox.cashfree.com, and https://js.sentry-cdn.com, plus <link rel="preload" href="https://sdk.cashfree.com/js/v3/cashfree.js" as="script">.
+2. Calling GET {hubUrl}/orders?warmup=1 (with x-client-id) on mount to wake the Payment Hub /orders serverless container and get the authoritative Cashfree mode ("sandbox" | "production"), then caching load({ mode }) in a singleton Map so Cashfree's ping_atom.html completes before the user clicks Pay.`}
                 />
               </div>
             </div>

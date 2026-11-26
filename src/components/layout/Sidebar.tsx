@@ -28,29 +28,37 @@ interface NavItem {
   icon: any;
   badge?: string;
   adminOnly?: boolean;
+  /** Client-shell routes have no SSR DB queries, so Next.js prefetching is safe and makes navigation instant */
+  prefetch?: boolean;
 }
 
 const navItems: NavItem[] = [
-  { label: "Overview", href: "/", icon: LayoutDashboard },
-  { label: "Integration Guides", href: "/guide", icon: BookOpen },
-  { label: "Applications", href: "/apps", icon: Layers },
-  { label: "Orders & Payments", href: "/orders", icon: ShoppingBag },
-  { label: "Refunds", href: "/refunds", icon: RotateCcw },
-  { label: "Reconciliation", href: "/reconciliation", icon: Scale },
-  { label: "Outbox Queue", href: "/outbox", icon: Send },
-  { label: "Audit Logs", href: "/audit-logs", icon: ShieldCheck },
-  { label: "System Settings", href: "/settings", icon: Settings, adminOnly: true },
-  { label: "User Profile", href: "/profile", icon: UserCircle },
+  { label: "Overview", href: "/", icon: LayoutDashboard, prefetch: false },
+  { label: "Integration Guides", href: "/guide", icon: BookOpen, prefetch: true },
+  { label: "Applications", href: "/apps", icon: Layers, prefetch: true },
+  { label: "Orders & Payments", href: "/orders", icon: ShoppingBag, prefetch: false },
+  { label: "Refunds", href: "/refunds", icon: RotateCcw, prefetch: false },
+  { label: "Reconciliation", href: "/reconciliation", icon: Scale, prefetch: false },
+  { label: "Outbox Queue", href: "/outbox", icon: Send, prefetch: false },
+  { label: "Audit Logs", href: "/audit-logs", icon: ShieldCheck, prefetch: false },
+  { label: "System Settings", href: "/settings", icon: Settings, adminOnly: true, prefetch: true },
+  { label: "User Profile", href: "/profile", icon: UserCircle, prefetch: true },
 ];
 
 export function Sidebar() {
   const pathname = usePathname();
   const { mobileOpen, closeSidebar } = useSidebar();
   const [userRole, setUserRole] = useState<string>("ADMIN");
+  const [pendingHref, setPendingHref] = useState<string | null>(null);
+
+  useEffect(() => {
+    setPendingHref(null);
+  }, [pathname]);
 
   useEffect(() => {
     const supabase = createClient();
-    supabase.auth.getUser().then(({ data: { user } }) => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      const user = session?.user;
       if (user) {
         const role = (user.app_metadata?.role || user.user_metadata?.role || "EMPLOYEE").toUpperCase();
         setUserRole(role);
@@ -120,12 +128,18 @@ export function Sidebar() {
         </div>
         {visibleNavItems.map((item) => {
           const Icon = item.icon;
-          const isActive = pathname === item.href;
+          const isActive = pendingHref ? pendingHref === item.href : pathname === item.href;
           return (
             <Link
               key={item.href}
               href={item.href}
-              onClick={closeSidebar}
+              prefetch={item.prefetch ?? false}
+              onClick={() => {
+                if (pathname !== item.href) {
+                  setPendingHref(item.href);
+                }
+                closeSidebar();
+              }}
               className={cn(
                 "flex items-center justify-between px-3 py-2.5 sm:py-2 rounded-lg text-xs font-medium transition",
                 isActive

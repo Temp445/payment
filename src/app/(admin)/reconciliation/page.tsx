@@ -1,11 +1,11 @@
-import React from "react";
+import React, { Suspense } from "react";
 import { Header } from "@/components/layout/Header";
 import { ReconciliationClient } from "@/components/reconciliation/ReconciliationClient";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
-export default async function ReconciliationPage() {
+async function ReconciliationContent() {
   let settledVolume = 0;
   let settledCount = 0;
   let paidVolume = 0;
@@ -36,14 +36,22 @@ export default async function ReconciliationPage() {
   }
 
   return (
+    <ReconciliationClient
+      settledVolume={settledVolume}
+      settledCount={settledCount}
+      paidVolume={paidVolume}
+      initialSettlements={settlements}
+    />
+  );
+}
+
+export default function ReconciliationPage() {
+  return (
     <>
       <Header title="Cashfree Settlement & Reconciliation" />
-      <ReconciliationClient
-        settledVolume={settledVolume}
-        settledCount={settledCount}
-        paidVolume={paidVolume}
-        initialSettlements={settlements}
-      />
+      <Suspense fallback={<div className="h-64 rounded-xl border border-[var(--border)] bg-[var(--card)]/40" />}>
+        <ReconciliationContent />
+      </Suspense>
     </>
   );
 }

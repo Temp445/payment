@@ -17,7 +17,8 @@ export function Header({ title }: { title: string }) {
 
   useEffect(() => {
     const supabase = createClient();
-    supabase.auth.getUser().then(({ data: { user } }) => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      const user = session?.user;
       if (user?.email) {
         setUserEmail(user.email);
         const userMeta = (user.user_metadata || {}) as Record<string, any>;

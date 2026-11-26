@@ -1,19 +1,23 @@
-import React from "react";
+import React, { Suspense } from "react";
 import { Header } from "@/components/layout/Header";
 import { OrdersTableClient } from "@/components/orders/OrdersTableClient";
 import { prisma } from "@/lib/prisma";
 import { OrderService } from "@/services/order.service";
-import { createClient } from "@/lib/supabase/server";
+import { getSessionUser } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
-export default async function OrdersPage() {
-  await OrderService.autoExpireStaleOrders(20);
+let lastAutoExpireAt = 0;
 
-  const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+async function OrdersContent() {
+  // Run stale-order expiration in the background at most once every 5 minutes so it never blocks page render
+  const now = Date.now();
+  if (now - lastAutoExpireAt > 5 * 60 * 1000) {
+    lastAutoExpireAt = now;
+    void OrderService.autoExpireStaleOrders(20);
+  }
+
+  const user = await getSessionUser();
 
   const appMeta = (user?.app_metadata || {}) as Record<string, any>;
   const userMeta = (user?.user_metadata || {}) as Record<string, any>;
@@ -29,7 +33,7 @@ export default async function OrdersPage() {
 
   const orders = await prisma.order.findMany({
     where: whereClause,
-    take: 500,
+    take: 200,
     orderBy: { createdAt: "desc" },
     include: {
       application: {
@@ -43,7 +47,6 @@ export default async function OrdersPage() {
           paymentGroup: true,
           bankReference: true,
           paymentTime: true,
-          rawWebhookPayload: true,
         },
       },
       refunds: true,
@@ -52,8 +55,6 @@ export default async function OrdersPage() {
 
   return (
     <>
-      <Header title="Live Orders & Transactions Explorer" />
-
       <div className="flex items-center justify-between">
         <div>
           <div className="flex items-center gap-2">
@@ -73,6 +74,17 @@ export default async function OrdersPage() {
       </div>
 
       <OrdersTableClient initialOrders={orders} />
+    </>
+  );
+}
+
+export default function OrdersPage() {
+  return (
+    <>
+      <Header title="Live Orders & Transactions Explorer" />
+      <Suspense fallback={<div className="h-64 rounded-xl border border-[var(--border)] bg-[var(--card)]/40" />}>
+        <OrdersContent />
+      </Suspense>
     </>
   );
 }

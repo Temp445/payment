@@ -147,8 +147,7 @@ function LoginForm() {
         }
 
         setLoadingState("redirecting");
-        router.push(next);
-        router.refresh();
+        router.replace(next);
         return;
       } catch (err: any) {
         setError(err.message || "Failed to initialize Admin account.");
@@ -200,8 +199,7 @@ function LoginForm() {
         }
 
         setLoadingState("redirecting");
-        router.push(next);
-        router.refresh();
+        router.replace(next);
         return;
       }
     } catch (err: any) {

@@ -40,40 +40,11 @@ export class OrderService {
    * Create an order and generate Cashfree payment session
    */
   static async createOrder(app: AuthenticatedApp, input: CreateOrderInput, hubOrigin?: string) {
+    await ensureHubConfigLoaded();
     const cfOrderId = this.formatCashfreeOrderId(app.appCode, input.order_id);
 
-    // 1. Config load + idempotency lookup run in PARALLEL (saves one DB round-trip)
-    const [, existingOrder] = await Promise.all([
-      ensureHubConfigLoaded(),
-      prisma.order.findUnique({
-        where: {
-          applicationId_appOrderId: {
-            applicationId: app.id,
-            appOrderId: input.order_id,
-          },
-        },
-      }),
-    ]);
-
-    if (existingOrder && existingOrder.paymentSessionId) {
-      const { isProd } = getCachedCashfreeConfig();
-      const mode = isProd ? "production" : "sandbox";
-
-      return {
-        success: true,
-        isExisting: true,
-        order_id: existingOrder.appOrderId,
-        cf_order_id: existingOrder.cfOrderId,
-        payment_session_id: existingOrder.paymentSessionId,
-        checkout_url: this.checkoutUrl(hubOrigin, existingOrder.paymentSessionId),
-        order_status: existingOrder.orderStatus,
-        order_amount: Number(existingOrder.orderAmount),
-        environment: mode,
-        mode: mode,
-      };
-    }
-
-    // 2. Persist initial order in Supabase via Prisma (Status: CREATED)
+    // Request Payment Session from Cashfree Adapter directly (skips upfront findUnique DB round-trip;
+    // duplicate order_id is handled via P2002 fallback below)
     const { isProd } = getCachedCashfreeConfig();
     const currentMode = isProd ? "production" : "sandbox";
     const orderMetadata = {
@@ -82,8 +53,6 @@ export class OrderService {
         : {}),
       environment: currentMode,
     };
-
-    // 3. Request Payment Session from Cashfree Adapter FIRST (the only call the popup depends on)
     const cfResponse = await CashfreeAdapter.createOrder({
       cfOrderId: cfOrderId,
       orderAmount: input.order_amount,
@@ -101,57 +70,73 @@ export class OrderService {
 
     const paymentSessionId = cfResponse.payment_session_id;
 
-    // 4+5. Persist the ACTIVE order (single upsert) and write the audit log IN PARALLEL.
-    // Previously: upsert(CREATED) -> Cashfree -> update(ACTIVE) -> audit = 4 sequential DB hops.
-    const orderId = existingOrder?.id ?? randomUUID();
-    await Promise.all([
-      prisma.order.upsert({
-        where: {
-          applicationId_appOrderId: {
+    // Persist the ACTIVE order and audit log in parallel (1 DB round-trip instead of 2-3).
+    // If a duplicate order_id races or retries (P2002), fall back to returning the existing order.
+    const orderId = randomUUID();
+    try {
+      await Promise.all([
+        prisma.order.create({
+          data: {
+            id: orderId,
             applicationId: app.id,
             appOrderId: input.order_id,
-          },
-        },
-        create: {
-          id: orderId,
-          applicationId: app.id,
-          appOrderId: input.order_id,
-          cfOrderId: cfOrderId,
-          paymentSessionId: paymentSessionId,
-          orderAmount: input.order_amount,
-          orderCurrency: input.order_currency || "INR",
-          orderStatus: "ACTIVE",
-          customerId: input.customer_details.customer_id,
-          customerPhone: input.customer_details.customer_phone,
-          customerEmail: input.customer_details.customer_email,
-          customerName: input.customer_details.customer_name,
-          orderNote: input.order_note,
-          returnUrl: input.order_meta?.return_url,
-          notifyUrl: input.order_meta?.notify_url,
-          metadata: orderMetadata,
-        },
-        update: {
-          orderAmount: input.order_amount,
-          paymentSessionId: paymentSessionId,
-          orderStatus: "ACTIVE",
-          metadata: orderMetadata,
-        },
-      }),
-      prisma.auditLog.create({
-        data: {
-          applicationId: app.id,
-          action: "ORDER_CREATED",
-          entityType: "Order",
-          entityId: orderId,
-          requestDetails: {
-            appOrderId: input.order_id,
             cfOrderId: cfOrderId,
-            amount: input.order_amount,
+            paymentSessionId: paymentSessionId,
+            orderAmount: input.order_amount,
+            orderCurrency: input.order_currency || "INR",
+            orderStatus: "ACTIVE",
             customerId: input.customer_details.customer_id,
+            customerPhone: input.customer_details.customer_phone,
+            customerEmail: input.customer_details.customer_email,
+            customerName: input.customer_details.customer_name,
+            orderNote: input.order_note,
+            returnUrl: input.order_meta?.return_url,
+            notifyUrl: input.order_meta?.notify_url,
+            metadata: orderMetadata,
           },
-        },
-      }),
-    ]);
+        }),
+        prisma.auditLog.create({
+          data: {
+            applicationId: app.id,
+            action: "ORDER_CREATED",
+            entityType: "Order",
+            entityId: orderId,
+            requestDetails: {
+              appOrderId: input.order_id,
+              cfOrderId: cfOrderId,
+              amount: input.order_amount,
+              customerId: input.customer_details.customer_id,
+            },
+          },
+        }),
+      ]);
+    } catch (dbErr: any) {
+      if (dbErr?.code === "P2002") {
+        const existingOrder = await prisma.order.findUnique({
+          where: {
+            applicationId_appOrderId: {
+              applicationId: app.id,
+              appOrderId: input.order_id,
+            },
+          },
+        });
+        if (existingOrder?.paymentSessionId) {
+          return {
+            success: true,
+            isExisting: true,
+            order_id: existingOrder.appOrderId,
+            cf_order_id: existingOrder.cfOrderId,
+            payment_session_id: existingOrder.paymentSessionId,
+            checkout_url: this.checkoutUrl(hubOrigin, existingOrder.paymentSessionId),
+            order_status: existingOrder.orderStatus,
+            order_amount: Number(existingOrder.orderAmount),
+            environment: currentMode,
+            mode: currentMode,
+          };
+        }
+      }
+      throw dbErr;
+    }
 
     logger.info(`Order created successfully: ${cfOrderId} for ${app.appCode}`);
 

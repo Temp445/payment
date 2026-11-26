@@ -10,92 +10,23 @@ import { formatCurrency, formatDate, getOrderDisplayStatus, getOrderEnvironment 
 import { DollarSign, Activity, Layers, Send } from "lucide-react";
 import Link from "next/link";
 import { OrderService } from "@/services/order.service";
-import { createClient } from "@/lib/supabase/server";
+import { getSessionUser } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
-
-function DashboardSkeleton() {
-  return (
-    <div className="space-y-6 animate-pulse">
-      {/* Header Skeleton */}
-      <div className="h-16 border-b border-[var(--border)] flex items-center justify-between px-2">
-        <div className="h-6 w-56 bg-slate-800/80 rounded-lg"></div>
-        <div className="h-8 w-36 bg-slate-800/60 rounded-full"></div>
-      </div>
-
-      {/* KPI Cards Skeleton */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4">
-        {[1, 2, 3, 4].map((i) => (
-          <div
-            key={i}
-            className="p-4 sm:p-5 rounded-xl border border-[var(--border)] bg-[var(--card)]/60 space-y-3"
-          >
-            <div className="flex items-center justify-between">
-              <div className="h-3.5 w-28 bg-slate-800 rounded"></div>
-              <div className="w-8 h-8 rounded-lg bg-slate-800/80"></div>
-            </div>
-            <div className="h-7 w-32 bg-slate-700/80 rounded"></div>
-            <div className="h-3 w-40 bg-slate-800/60 rounded"></div>
-          </div>
-        ))}
-      </div>
-
-      {/* Charts Section Skeleton */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        <div className="lg:col-span-8 p-5 rounded-xl border border-[var(--border)] bg-[var(--card)]/60 space-y-4">
-          <div className="h-4 w-40 bg-slate-800 rounded"></div>
-          <div className="h-56 bg-slate-900/50 rounded-lg"></div>
-        </div>
-        <div className="lg:col-span-4 p-5 rounded-xl border border-[var(--border)] bg-[var(--card)]/60 space-y-4">
-          <div className="h-4 w-32 bg-slate-800 rounded"></div>
-          <div className="h-56 bg-slate-900/50 rounded-lg"></div>
-        </div>
-      </div>
-
-      {/* Recent Orders Skeleton */}
-      <div className="p-5 rounded-xl border border-[var(--border)] bg-[var(--card)]/60 space-y-4">
-        <div className="h-4 w-48 bg-slate-800 rounded"></div>
-        <div className="space-y-3 pt-2">
-          {[1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="h-10 bg-slate-800/40 rounded-lg"></div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 async function OverviewContent({
   searchParams,
 }: {
   searchParams?: { app?: string };
 }) {
-  const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getSessionUser();
 
   const appMeta = (user?.app_metadata || {}) as Record<string, any>;
   const userMeta = (user?.user_metadata || {}) as Record<string, any>;
   const role: "ADMIN" | "EMPLOYEE" = (appMeta.role || userMeta.role || "EMPLOYEE").toUpperCase() === "ADMIN" ? "ADMIN" : "EMPLOYEE";
   const userAllowedAppIds: string[] = Array.isArray(appMeta.allowed_app_ids) ? appMeta.allowed_app_ids : [];
 
-  // 1. Fetch available apps from database once (active and inactive)
-  const allApps = await prisma.application.findMany({
-    select: { id: true, appCode: true, appName: true, isActive: true },
-    orderBy: { appCode: "asc" },
-  });
-
-  const userScopedApps =
-    role === "ADMIN"
-      ? allApps
-      : allApps.filter((a) => userAllowedAppIds.includes(a.id));
-
-  const selectableApps = userScopedApps.filter((a) => a.isActive);
-  const activeAppsCount = selectableApps.length;
-  const totalAppsCount = userScopedApps.length;
-
-  // Determine query condition based on role and selected app
+  // Determine query condition based on role and selected app BEFORE hitting DB
   const requestedApp = searchParams?.app;
   let selectedAppId = "ALL";
   let appFilterCondition: any = {};
@@ -119,6 +50,8 @@ async function OverviewContent({
     }
   }
 
+  let allApps: { id: string; appCode: string; appName: string; isActive: boolean }[] = [];
+
   // Fetch real-time dashboard aggregates
   let totalVolume = 0;
   let liveVolume = 0;
@@ -139,6 +72,7 @@ async function OverviewContent({
     sevenDaysAgo.setHours(0, 0, 0, 0);
 
     const [
+      appsResult,
       initiatedAgg,
       paidAgg,
       outboxCount,
@@ -146,6 +80,11 @@ async function OverviewContent({
       payments,
       recentPaidOrders,
     ] = await Promise.all([
+      // 0. Available apps (run in parallel instead of blocking before Promise.all)
+      prisma.application.findMany({
+        select: { id: true, appCode: true, appName: true, isActive: true },
+        orderBy: { appCode: "asc" },
+      }),
       // 1. Consolidated total orders aggregate (sum + count)
       prisma.order.aggregate({
         where: appFilterCondition,
@@ -204,6 +143,7 @@ async function OverviewContent({
       }),
     ]);
 
+    allApps = appsResult;
     const allPaidOrders = recentPaidOrders;
     allPaidOrders.forEach((order) => {
       const env = getOrderEnvironment(order);
@@ -284,10 +224,17 @@ async function OverviewContent({
     console.error("Dashboard DB fetch error (may need migrations first):", err);
   }
 
+  const userScopedApps =
+    role === "ADMIN"
+      ? allApps
+      : allApps.filter((a) => userAllowedAppIds.includes(a.id));
+
+  const selectableApps = userScopedApps.filter((a) => a.isActive);
+  const activeAppsCount = selectableApps.length;
+  const totalAppsCount = userScopedApps.length;
+
   return (
     <>
-      <Header title="Executive Overview & Analytics" />
-
       {/* Application Volume Filter Bar */}
       <AppFilterBar
         applications={selectableApps}
@@ -451,11 +398,13 @@ async function OverviewContent({
 }
 
 export default function OverviewPage(props: { searchParams?: { app?: string } }) {
-  const currentAppKey = props.searchParams?.app || "ALL";
   return (
-    <Suspense key={currentAppKey} fallback={<DashboardSkeleton />}>
-      <OverviewContent {...props} />
-    </Suspense>
+    <>
+      <Header title="Executive Overview & Analytics" />
+      <Suspense fallback={<div className="h-64 rounded-xl border border-[var(--border)] bg-[var(--card)]/40" />}>
+        <OverviewContent {...props} />
+      </Suspense>
+    </>
   );
 }
 

@@ -1,6 +1,34 @@
 import { createServerClient } from "@supabase/ssr";
 import { type NextRequest, NextResponse } from "next/server";
 
+// Cache Supabase JWKS in module memory so middleware verifies JWTs locally with 0 network calls
+let cachedJwks: { keys: any[] } | null = null;
+let jwksFetchedAt = 0;
+const JWKS_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+async function getCachedJwks(supabaseUrl: string) {
+  const now = Date.now();
+  if (cachedJwks && now - jwksFetchedAt < JWKS_TTL_MS) {
+    return cachedJwks;
+  }
+  try {
+    const res = await fetch(`${supabaseUrl}/auth/v1/.well-known/jwks.json`, {
+      cache: "force-cache",
+    });
+    if (res.ok) {
+      const json = await res.json();
+      if (Array.isArray(json?.keys) && json.keys.length > 0) {
+        cachedJwks = json;
+        jwksFetchedAt = now;
+        return cachedJwks;
+      }
+    }
+  } catch {
+    // Fall back to default getClaims() fetch
+  }
+  return undefined;
+}
+
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({
     request: {
@@ -69,12 +97,12 @@ export async function updateSession(request: NextRequest) {
     },
   });
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const jwks = await getCachedJwks(url);
+  const { data: claimsData } = await supabase.auth.getClaims(undefined, jwks ? { jwks } : undefined);
+  const claims = claimsData?.claims as Record<string, any> | undefined;
 
   // Handle unauthenticated visitors attempting to access protected routes
-  if (!user && !isAuthPage && !isPublicPage) {
+  if (!claims && !isAuthPage && !isPublicPage) {
     const redirectUrl = request.nextUrl.clone();
     redirectUrl.pathname = "/login";
     redirectUrl.searchParams.set("next", pathname);
@@ -82,9 +110,9 @@ export async function updateSession(request: NextRequest) {
   }
 
   // Handle authenticated users
-  if (user) {
-    const appMeta = (user.app_metadata || {}) as Record<string, any>;
-    const userMeta = (user.user_metadata || {}) as Record<string, any>;
+  if (claims) {
+    const appMeta = (claims.app_metadata || {}) as Record<string, any>;
+    const userMeta = (claims.user_metadata || {}) as Record<string, any>;
     const isApproved = appMeta.is_approved === true || userMeta.is_approved === true;
     const status = appMeta.status || userMeta.status || (isApproved ? "ACTIVE" : "PENDING_APPROVAL");
     const role = (appMeta.role || userMeta.role || "EMPLOYEE").toUpperCase();
