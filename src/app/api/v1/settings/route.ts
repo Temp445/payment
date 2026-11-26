@@ -37,7 +37,11 @@ const settingsSchema = z.object({
   cashfreeTestSecretKey: z.string().trim().optional(),
   cashfreeProdAppId: z.string().trim().optional(),
   cashfreeProdSecretKey: z.string().trim().optional(),
-  cashfreeApiVersion: z.string().trim().optional(),
+  cashfreeApiVersion: z
+    .string()
+    .trim()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Cashfree API version must be in YYYY-MM-DD format (e.g. 2023-08-01, 2025-01-01, 2026-01-01)")
+    .optional(),
 
   // Email / Outbound SMTP Settings
   smtpHost: z.string().trim().optional(),

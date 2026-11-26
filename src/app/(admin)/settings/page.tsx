@@ -575,11 +575,22 @@ function SettingsContent() {
                       <input
                         type="text"
                         required
+                        list="cashfree-api-versions"
+                        pattern="\d{4}-\d{2}-\d{2}"
                         value={cashfreeApiVersion}
                         onChange={(e) => setCashfreeApiVersion(e.target.value)}
-                        placeholder="2023-08-01"
+                        placeholder="2025-01-01"
                         className="w-full px-3.5 py-2 rounded-lg bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)] font-mono focus:outline-none focus:border-blue-500 transition text-xs"
                       />
+                      <datalist id="cashfree-api-versions">
+                        <option value="2026-01-01">2026-01-01 (Latest)</option>
+                        <option value="2025-01-01">2025-01-01 (Recommended)</option>
+                        <option value="2023-08-01">2023-08-01 (Legacy)</option>
+                        <option value="2022-09-01">2022-09-01</option>
+                      </datalist>
+                      <p className="text-[10px] text-[var(--muted-foreground)]">
+                        Supports all Cashfree PG versions (<code className="text-slate-300">2022-09-01</code>, <code className="text-slate-300">2023-08-01</code>, <code className="text-slate-300">2025-01-01</code>, <code className="text-slate-300">2026-01-01</code>, or any <code className="text-slate-300">YYYY-MM-DD</code>).
+                      </p>
                     </div>
                   </div>
 
