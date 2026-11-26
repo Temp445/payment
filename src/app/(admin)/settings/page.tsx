@@ -583,9 +583,9 @@ function SettingsContent() {
                         className="w-full px-3.5 py-2 rounded-lg bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)] font-mono focus:outline-none focus:border-blue-500 transition text-xs"
                       />
                       <datalist id="cashfree-api-versions">
-                        <option value="2026-01-01">2026-01-01 (Latest)</option>
-                        <option value="2025-01-01">2025-01-01 (Recommended)</option>
-                        <option value="2023-08-01">2023-08-01 (Legacy)</option>
+                        <option value="2026-01-01">2026-01-01</option>
+                        <option value="2025-01-01">2025-01-01</option>
+                        <option value="2023-08-01">2023-08-01</option>
                         <option value="2022-09-01">2022-09-01</option>
                       </datalist>
                       <p className="text-[10px] text-[var(--muted-foreground)]">
